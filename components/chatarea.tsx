@@ -15,6 +15,7 @@ import PerformanceMonitor from "./performance-monitor";
 import NetworkStatus from "./network-status";
 import remarkGfm from 'remark-gfm';
 import Markdown from "react-markdown";
+import { modelId, modelName } from "@/constant/modelConfig";
 
 interface CodeBlockProps {
   language: string;
@@ -131,7 +132,7 @@ export default function ChatInterface() {
 
         request.onsuccess = () => {
           const db = request.result;
-          // Check if the model store exists and has entries
+          // Check if the model store exists
           if (!db.objectStoreNames.contains("models")) {
             console.log("No models store found");
             resolve(false);
@@ -141,16 +142,48 @@ export default function ChatInterface() {
           try {
             const transaction = db.transaction("models", "readonly");
             const store = transaction.objectStore("models");
+
+            // First check if there are any entries at all
             const countRequest = store.count();
 
             countRequest.onsuccess = () => {
               const hasEntries = countRequest.result > 0;
-              console.log(
-                `Model cache check: ${
-                  hasEntries ? "Found cached data" : "No cached data found"
-                }`
+
+              if (!hasEntries) {
+                console.log("Model cache check: No cached data found");
+                resolve(false);
+                return;
+              }
+
+              // If there are entries, check specifically for model files
+              // This is a more thorough check to ensure the model is fully cached
+              const modelKeyRange = IDBKeyRange.bound(
+                [_modelId, ""],
+                [_modelId, "\uffff"]
               );
-              resolve(hasEntries);
+
+              const modelFilesRequest = store.getAll(modelKeyRange);
+
+              modelFilesRequest.onsuccess = () => {
+                const modelFiles = modelFilesRequest.result;
+                const isModelCached = modelFiles.length > 0;
+
+                console.log(
+                  `Model cache check for ${_modelId}: ${
+                    isModelCached
+                      ? `Found ${modelFiles.length} cached model files`
+                      : "No model files found"
+                  }`
+                );
+
+                resolve(isModelCached);
+              };
+
+              modelFilesRequest.onerror = () => {
+                console.log("Error checking specific model files in cache");
+                // Fall back to the general check result
+                resolve(hasEntries);
+              };
             };
 
             countRequest.onerror = () => {
@@ -185,20 +218,54 @@ export default function ChatInterface() {
     const preloadModelCheck = async () => {
       if (typeof window !== "undefined") {
         // Get the selected model
-        const selectedModel = "gemma-2-2b-it-q4f16_1-MLC-1k";
+        const selectedModel = modelId;
 
         // Check if model is cached early
         const isCached = await checkModelCache(selectedModel);
         setIsModelCached(isCached);
 
-        // If model is cached, prepare IndexedDB for faster access
-        if (isCached) {
+        // Check when the model was last successfully loaded
+        const lastLoadedTime = localStorage.getItem("modelLastLoadedTime");
+        let isRecentlyLoaded = false;
+
+        if (lastLoadedTime) {
+          try {
+            const lastLoaded = new Date(lastLoadedTime);
+            const now = new Date();
+            // If model was loaded in the last 7 days, consider it valid
+            const daysSinceLastLoad = (now.getTime() - lastLoaded.getTime()) / (1000 * 60 * 60 * 24);
+            isRecentlyLoaded = daysSinceLastLoad < 7;
+
+            if (isRecentlyLoaded && !isCached) {
+              console.log("Model was recently loaded but not detected in cache - may be a cache detection issue");
+              // If model was recently loaded but not detected in cache, we'll still try to load it
+              setIsModelCached(true);
+            }
+          } catch (e) {
+            console.error("Error parsing last loaded time:", e);
+          }
+        }
+
+        // If model is cached or was recently loaded, prepare IndexedDB for faster access
+        if (isCached || isRecentlyLoaded) {
           try {
             // Open the database to warm up the cache
             const dbName = "webllm-indexeddb-cache";
             const request = indexedDB.open(dbName);
             request.onsuccess = () => {
               console.log("IndexedDB cache warmed up for faster model loading");
+
+              // If we're offline, pre-check if we can access the database properly
+              if (!isOnline) {
+                try {
+                  const db = request.result;
+                  if (db.objectStoreNames.contains("models")) {
+                    console.log("IndexedDB cache verified and accessible while offline");
+                  }
+                } catch (e) {
+                  console.error("Error accessing IndexedDB while offline:", e);
+                }
+              }
             };
           } catch (e) {
             console.error("Error warming up IndexedDB cache:", e);
@@ -208,14 +275,14 @@ export default function ChatInterface() {
     };
 
     preloadModelCheck();
-  }, []);
+  }, [isOnline]);
 
   // Load model effect
   useEffect(() => {
     const loadModel = async () => {
       // Get the selected model - using a smaller quantized model for faster loading
-      const selectedModel = "gemma-2-2b-it-q4f16_1-MLC-1k";
-      const selectedModelName = "Gemma 2";
+      const selectedModel = modelId;
+      const selectedModelName = modelName;
 
       setIsLoading(true);
       setHadGpuError(false);
@@ -229,22 +296,30 @@ export default function ChatInterface() {
         console.log("Model is cached, loading from cache");
         setLoadingStage("Loading model from cache...");
       } else if (!isOnline) {
-        console.log("Offline and model not cached - still rendering interface");
-        setLoadingStage("You are offline and the model is not cached");
-        // Continue to render the interface, but don't try to load the model
-        setIsLoading(false);
-        return;
+        console.log("Offline and model not detected in cache - attempting to load anyway");
+        setLoadingStage("Offline - attempting to load model from cache...");
+        // We'll still try to load the model even if our cache check didn't detect it
+        // This provides a fallback in case our cache detection isn't perfect
       } else {
         console.log("Model not cached, downloading...");
-        setLoadingStage(`Downloading model (~400MB required)...`);
+        setLoadingStage(`Downloading model (~900MB required)...`);
       }
 
-      // Configure the engine with IndexedDB caching for better offline support
+      // Configure the engine with enhanced IndexedDB caching for better offline support
       // Use type assertion to add performance optimizations
       const engineConfig = {
         appConfig: {
           ...webllm.prebuiltAppConfig,
           useIndexedDBCache: true, // Enable IndexedDB caching for offline use
+          cacheConfig: {
+            // Enhanced cache configuration
+            persistentStorage: true, // Use persistent storage when available
+            cacheTimeout: 3600000, // Longer cache timeout (1 hour)
+            prioritizeCachedData: true, // Always try to use cached data first
+            maxCacheSize: 2000 * 1024 * 1024, // Allow up to 2GB cache size
+          },
+          // Force offline mode if we're offline to prevent network requests
+          forceOfflineMode: !isOnline,
         },
         initProgressCallback: (progress: InitProgressReport) => {
           // Update loading stage based on progress text
@@ -262,6 +337,12 @@ export default function ChatInterface() {
           setLoadingProgress(progress.progress);
         },
         logLevel: "INFO" as LogLevel, // Set to INFO to see more detailed logs
+        // Add retry options for better reliability
+        retryOptions: {
+          maxRetries: 3,
+          retryDelay: 1000,
+          retryOnNetworkError: true,
+        },
       };
 
       try {
@@ -297,8 +378,15 @@ export default function ChatInterface() {
         setEngine(engine);
         setIsLoading(false);
 
+        // Update model cache status since we successfully loaded it
+        setIsModelCached(true);
+
         // Save to localStorage that we've successfully loaded this model
         localStorage.setItem("lastSuccessfulModel", selectedModel);
+
+        // Store a timestamp of when the model was last successfully loaded
+        // This helps with cache validation in future sessions
+        localStorage.setItem("modelLastLoadedTime", new Date().toISOString());
       } catch (error) {
         console.error("Error loading model:", error);
 
@@ -321,9 +409,30 @@ export default function ChatInterface() {
             localStorage.setItem("lowMemoryMode", "true");
           }
         } else if (!isOnline) {
-          setLoadingStage(
-            "Error: You are offline and the model failed to load from cache"
-          );
+          // More detailed error message for offline mode
+          console.error("Offline mode error details:", error);
+
+          // Check if this might be a cache-related error
+          const errorString = String(error);
+          const isCacheError =
+            errorString.includes("cache") ||
+            errorString.includes("storage") ||
+            errorString.includes("IndexedDB") ||
+            errorString.includes("QuotaExceededError");
+
+          if (isCacheError) {
+            setLoadingStage(
+              "Error: Cache access issue. Try clearing browser data and reloading."
+            );
+          } else {
+            setLoadingStage(
+              "Error: You are offline and the model failed to load from cache. " +
+              "Please connect to the internet to download the model first."
+            );
+          }
+
+          // Set isModelCached to false since we couldn't load it
+          setIsModelCached(false);
         } else {
           setLoadingStage("Failed to load model. Please try again later.");
         }
@@ -598,7 +707,7 @@ export default function ChatInterface() {
               You are currently offline.{" "}
               {isModelCached
                 ? "Loading model from cache..."
-                : "Cannot load model without internet connection."}
+                : "Cannot download model without internet connection."}
             </div>
           )}
 
@@ -614,7 +723,7 @@ export default function ChatInterface() {
             </div>
           )}
         </div>
-      ) : !engine && !isOnline && !isModelCached ? (
+      ) : !engine && !isOnline ? (
         <div className="relative h-full">
           <PerformanceMonitor />
           <NetworkStatus />
@@ -627,10 +736,47 @@ export default function ChatInterface() {
 
             <div className="mt-4 p-3 bg-red-900/30 border border-red-700 rounded-md text-red-300 max-w-md text-center">
               <p className="font-semibold mb-2">You are currently offline</p>
-              <p>
-                The model is not cached on this device. Connect to the internet
-                to download the model for offline use.
-              </p>
+              {!isModelCached ? (
+                <>
+                  <p className="mb-2">
+                    The model is not detected in the cache on this device.
+                  </p>
+                  <p className="mb-2">
+                    Connect to the internet to download the model for offline use.
+                  </p>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="mt-2 px-4 py-2 bg-red-800 hover:bg-red-700 rounded-md text-white text-sm"
+                  >
+                    Try Again
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="mb-2">
+                    The model is cached but failed to load. This could be due to:
+                  </p>
+                  <ul className="text-left list-disc pl-5 mb-2">
+                    <li>Incomplete model download</li>
+                    <li>Cache corruption</li>
+                    <li>Browser storage limitations</li>
+                  </ul>
+                  <div className="flex gap-2 justify-center mt-3">
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="px-3 py-1 bg-red-800 hover:bg-red-700 rounded-md text-white text-sm"
+                    >
+                      Try Again
+                    </button>
+                    <button
+                      onClick={() => clearConversation(true)}
+                      className="px-3 py-1 bg-red-800 hover:bg-red-700 rounded-md text-white text-sm"
+                    >
+                      Clear Cache & Reload
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
 
             {messages.length > 1 && (
@@ -912,9 +1058,11 @@ export default function ChatInterface() {
                 : isGenerating
                 ? `Generating response with model...`
                 : engine
-                ? `Using model (cached and ready for offline use)`
-                : !isOnline && !isModelCached
-                ? `Offline mode - model not available`
+                ? `Using model (${isModelCached ? 'cached and ready for offline use' : 'online mode'})`
+                : !isOnline
+                ? isModelCached
+                  ? `Offline mode - model cached but failed to load`
+                  : `Offline mode - model not available`
                 : "Model not loaded"}
             </p>
 
