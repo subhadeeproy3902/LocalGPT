@@ -14,6 +14,12 @@
   background-color: rgba(0, 0, 0, 0.1) !important;
 }
 
+/* Style for the child div of scroll-area-viewport */
+[data-slot="scroll-area-viewport"] > div {
+  display: flex !important;
+  flex-direction: column;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -205,17 +211,37 @@
 }
 
 .markdown-body pre {
-  background-color: #464646dc;
-  border-left: 3px solid #e3843b;
+  background-color: transparent;
   color: white;
-  padding: 10px;
   overflow-x: auto;
+  position: relative;
+  padding: 0;
+  margin: 1em 0;
 }
 
 .markdown-body code {
   padding: 2px 4px;
   font-size: 90%;
   border-radius: 3px;
+  font-family: var(--font-mono);
+}
+
+/* Custom styling for syntax highlighter */
+.markdown-body pre {
+  border-radius: 6px !important;
+  margin: 1em 0 !important;
+}
+
+.markdown-body pre > div {
+  border-radius: 4px !important;
+  padding: 1em !important;
+  margin: 0 !important;
+}
+
+/* Improve code readability */
+.markdown-body code {
+  font-family: var(--font-mono) !important;
+  font-size: 0.9em !important;
 }
 
 /* Tables */

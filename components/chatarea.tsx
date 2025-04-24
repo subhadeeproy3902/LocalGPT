@@ -9,9 +9,29 @@ import { cn } from "@/lib/utils";
 import { ScrollArea } from "./ui/scroll-area";
 import * as webllm from "@mlc-ai/web-llm";
 import { InitProgressReport, LogLevel } from "@mlc-ai/web-llm";
-import ReactMarkdown from "react-markdown";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { atomDark as dark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import PerformanceMonitor from "./performance-monitor";
 import NetworkStatus from "./network-status";
+import remarkGfm from 'remark-gfm';
+import Markdown from "react-markdown";
+
+interface CodeBlockProps {
+  language: string;
+  value: string;
+}
+
+const CodeBlock: React.FC<CodeBlockProps> = ({ language, value }) => {
+  return (
+    <div style={{ position: 'relative', marginBottom: '1rem' }}>
+      <SyntaxHighlighter language={language} style={dark}>
+        {value}
+      </SyntaxHighlighter>
+    </div>
+  );
+};
+
+
 
 type Message = {
   content: string;
@@ -652,7 +672,7 @@ export default function ChatInterface() {
                         "my-4",
                         message.role === "user"
                           ? "ml-auto w-fit max-w-[90%]"
-                          : "w-full mr-auto"
+                          : "w-fit mr-auto"
                       )}
                     >
                       {message.role === "user" && (
@@ -688,7 +708,23 @@ export default function ChatInterface() {
                               </div>
                             ) : (
                               <div className="markdown-body">
-                                <ReactMarkdown>{message.content}</ReactMarkdown>
+                                <Markdown
+                                  remarkPlugins={[remarkGfm]}
+                                  components={{
+                                    code({ className, children, ...props }) {
+                                      const match = /language-(\w+)/.exec(className || '');
+                                      return match ? (
+                                        <CodeBlock language={match[1]} value={String(children).replace(/\n$/, '')} />
+                                      ) : (
+                                        <code className={className} {...props}>
+                                          {children}
+                                        </code>
+                                      );
+                                    },
+                                  }}
+                                >
+                                  {message.content}
+                                </Markdown>
                               </div>
                             )}
                           </div>
