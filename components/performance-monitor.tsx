@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import "@webgpu/types";
 
 export default function PerformanceMonitor() {
   const [cpuUsage, setCpuUsage] = useState<number>(0);
