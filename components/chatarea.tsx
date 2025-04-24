@@ -9,10 +9,13 @@ import { cn } from "@/lib/utils";
 import { ScrollArea } from "./ui/scroll-area";
 import * as webllm from "@mlc-ai/web-llm";
 import { InitProgressReport, LogLevel } from "@mlc-ai/web-llm";
+import ReactMarkdown from "react-markdown";
+import PerformanceMonitor from "./performance-monitor";
 
 type Message = {
   content: string;
   role: "user" | "assistant" | "system";
+  timestamp?: Date; // Optional timestamp for when the message was created
 };
 
 export default function ChatInterface() {
@@ -46,6 +49,7 @@ export default function ChatInterface() {
         role: "system",
         content:
           "You are a helpful assistant. You provide markdown coded responses only. You are just like ChatGPT.",
+        timestamp: new Date(),
       },
     ];
   });
@@ -148,8 +152,8 @@ export default function ChatInterface() {
   useEffect(() => {
     const loadModel = async () => {
       // Get the selected model
-      const selectedModel = "Phi-3.5-mini-instruct-q4f16_1-MLC-1k";
-      const selectedModelName = "Phi 3.5 mini";
+      const selectedModel = "TinyLlama-1.1B-Chat-v1.0-q4f16_1-MLC-1k";
+      const selectedModelName = "Tiny Llama";
 
       setIsLoading(true);
       setHadGpuError(false);
@@ -246,7 +250,12 @@ export default function ChatInterface() {
   const handleSendMessage = async () => {
     if (!input.trim() || !engine || isGenerating) return;
 
-    const userMessage = { content: input, role: "user" as const };
+    const now = new Date();
+    const userMessage = {
+      content: input,
+      role: "user" as const,
+      timestamp: now
+    };
     setMessages([...messages, userMessage]);
     setInput("");
     setIsGenerating(true);
@@ -258,72 +267,69 @@ export default function ChatInterface() {
       // Add a temporary loading message
       setMessages((prev) => [
         ...prev,
-        { content: "", role: "assistant" as const },
+        { content: "", role: "assistant" as const, timestamp: now },
       ]);
 
-      // Use streaming for faster initial response
+      // Use non-streaming for more reliable response
       const startTime = performance.now();
 
-      // Create a more efficient configuration for generation
+      // Create configuration for generation without streaming
       const generationConfig = {
-        messages: currentMessages,
-        stream: true, // Enable streaming for faster response
+        messages: currentMessages.map(({ role, content }) => ({ role, content })), // Strip timestamp for API
+        stream: false, // Disable streaming for more reliable response
       };
 
       // Start the generation
-      const response = await engine.chat.completions.create(generationConfig);
+      const response = await engine.chat.completions.create(generationConfig) as webllm.ChatCompletion;
 
-      let fullResponse = "";
-      let lastUpdateTime = performance.now();
-      const updateInterval = 50; // Update UI every 50ms at most to avoid excessive re-renders
+      // Get the full response
+      const fullResponse = response.choices[0].message.content || "";
 
-      // Check if response is streaming or not
-      if ("choices" in response && !("delta" in response.choices[0])) {
-        // Non-streaming response
-        fullResponse = response.choices[0].message.content || "";
+      // Simulate streaming with animation in the UI
+      let displayedResponse = "";
+      const responseLength = fullResponse.length;
+      const animationDuration = Math.min(5000, Math.max(1000, responseLength * 10)); // Between 1-5 seconds based on length
+      const updateInterval = 50; // Update UI every 50ms
+      const charsPerUpdate = Math.max(1, Math.ceil(responseLength / (animationDuration / updateInterval)));
 
-        // Update the message with the full response
+      let currentIndex = 0;
+      const animationInterval = setInterval(() => {
+        if (currentIndex >= responseLength) {
+          clearInterval(animationInterval);
+          return;
+        }
+
+        const nextIndex = Math.min(responseLength, currentIndex + charsPerUpdate);
+        displayedResponse = fullResponse.substring(0, nextIndex);
+        currentIndex = nextIndex;
+
+        // Update the message with the current animated response
+        setMessages((prev) => [
+          ...prev.slice(0, prev.length - 1),
+          {
+            content: displayedResponse,
+            role: "assistant" as const,
+            timestamp: now,
+          },
+        ]);
+
+        if (currentIndex >= responseLength) {
+          clearInterval(animationInterval);
+        }
+      }, updateInterval);
+
+      // Final update to ensure we have the complete response (this will happen after animation completes)
+      setTimeout(() => {
         setMessages((prev) => [
           ...prev.slice(0, prev.length - 1),
           {
             content: fullResponse,
             role: "assistant" as const,
+            timestamp: now,
           },
         ]);
-      } else {
-        // Streaming response - handle as AsyncIterable
-        const chunks = response as AsyncIterable<webllm.ChatCompletionChunk>;
-
-        // Process each chunk as it arrives
-        for await (const chunk of chunks) {
-          if (chunk.choices[0]?.delta.content) {
-            fullResponse += chunk.choices[0].delta.content;
-
-            // Only update the UI periodically to avoid excessive re-renders
-            const currentTime = performance.now();
-            if (currentTime - lastUpdateTime > updateInterval) {
-              // Update the message with the current accumulated response
-              setMessages((prev) => [
-                ...prev.slice(0, prev.length - 1),
-                {
-                  content: fullResponse,
-                  role: "assistant" as const,
-                },
-              ]);
-              lastUpdateTime = currentTime;
-            }
-          }
-        }
-      }
-
-      // Final update to ensure we have the complete response
-      setMessages((prev) => [
-        ...prev.slice(0, prev.length - 1),
-        {
-          content: fullResponse,
-          role: "assistant" as const,
-        },
-      ]);
+        setIsGenerating(false);
+      }, animationDuration + 100);
 
       const endTime = performance.now();
       console.log(
@@ -335,7 +341,7 @@ export default function ChatInterface() {
         const conversationHistory = {
           messages: [
             ...currentMessages,
-            { content: fullResponse, role: "assistant" as const },
+            { content: fullResponse, role: "assistant" as const, timestamp: now },
           ],
           timestamp: new Date().toISOString(),
         };
@@ -356,9 +362,9 @@ export default function ChatInterface() {
           content:
             "Sorry, I encountered an error while generating a response. Please try again.",
           role: "assistant" as const,
+          timestamp: new Date(),
         },
       ]);
-    } finally {
       setIsGenerating(false);
     }
   };
@@ -383,6 +389,7 @@ export default function ChatInterface() {
         role: "system",
         content:
           "You are a helpful assistant. You provide markdown coded responses only.",
+        timestamp: new Date(),
       },
     ]);
 
@@ -449,51 +456,100 @@ export default function ChatInterface() {
           )}
         </div>
       ) : (
-        <ScrollArea className="py-4 overflow-y-auto px-4 h-full">
-          {messages.map((message, index) => (
-            <div
-              key={index}
-              className={cn(
-                "w-fit max-w-[90%] my-4",
-                message.role === "user" ? "place-self-end" : "self-end"
-              )}
-            >
-              {message.role === "user" && (
-                <div className="relative bg-[#2a2a2a] rounded-3xl px-4 py-2 text-white text-base">
-                  {message.content}
-                </div>
-              )}
+        <div className="relative h-full">
+          <PerformanceMonitor />
 
-              {message.role === "assistant" && (
-                <div className="text-white text-sm">
-                  <div
-                    dangerouslySetInnerHTML={{
-                      __html: message.content.replace(/•/g, "<br/>• "),
-                    }}
-                  />
-                  {message.content === "" && isGenerating && (
-                    <div className="flex space-x-2 mt-2">
-                      <div
-                        className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"
-                        style={{ animationDelay: "0ms" }}
-                      ></div>
-                      <div
-                        className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"
-                        style={{ animationDelay: "300ms" }}
-                      ></div>
-                      <div
-                        className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"
-                        style={{ animationDelay: "600ms" }}
-                      ></div>
+          {messages.length <= 1 && engine && (
+            <div className="flex flex-col items-center justify-center h-full">
+              <div className="text-white text-xl mb-4">Your LocalGPT has been set</div>
+              <div className="text-gray-400 text-sm">Start a conversation by typing a message below</div>
+            </div>
+          )}
+
+          <ScrollArea className="py-4 overflow-y-auto px-4 h-full">
+            {messages.length > 1 && messages.filter(m => m.role !== "system").map((message, index) => {
+              // Format timestamp
+              const timestamp = message.timestamp;
+              let timeString = "";
+
+              if (timestamp) {
+                const now = new Date();
+                const isToday = timestamp.getDate() === now.getDate() &&
+                                timestamp.getMonth() === now.getMonth() &&
+                                timestamp.getFullYear() === now.getFullYear();
+
+                if (isToday) {
+                  // Show only time for today's messages
+                  timeString = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                } else {
+                  // Show date and time for older messages
+                  timeString = timestamp.toLocaleDateString([], {
+                    month: 'short',
+                    day: 'numeric'
+                  }) + ' ' + timestamp.toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  });
+                }
+              }
+
+              return (
+                <div
+                  key={index}
+                  className={cn(
+                    "w-fit max-w-[90%] my-4",
+                    message.role === "user" ? "ml-auto" : "mr-auto"
+                  )}
+                >
+                  {message.role === "user" && (
+                    <div className="flex flex-col">
+                      <div className="relative bg-[#2a2a2a] rounded-3xl px-4 py-2 text-white text-base">
+                        {message.content}
+                      </div>
+                      {timestamp && (
+                        <div className="text-xs text-gray-500 mt-1 ml-2">
+                          {timeString}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {message.role === "assistant" && (
+                    <div className="flex flex-col">
+                      <div className="bg-[#1a1a1a] rounded-3xl px-4 py-2 text-white text-sm prose prose-invert max-w-none">
+                        {message.content === "" && isGenerating ? (
+                          <div className="flex space-x-2 mt-2">
+                            <div
+                              className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"
+                              style={{ animationDelay: "0ms" }}
+                            ></div>
+                            <div
+                              className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"
+                              style={{ animationDelay: "300ms" }}
+                            ></div>
+                            <div
+                              className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"
+                              style={{ animationDelay: "600ms" }}
+                            ></div>
+                          </div>
+                        ) : (
+                          <ReactMarkdown>{message.content}</ReactMarkdown>
+                        )}
+                      </div>
+                      {timestamp && (
+                        <div className="text-xs text-gray-500 mt-1 ml-2">
+                          {timeString}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              )}
-            </div>
-          ))}
+              );
+            })}
 
-          <div ref={messagesEndRef} />
-        </ScrollArea>
+            <div ref={messagesEndRef} />
+          </ScrollArea>
+        </div>
       )}
 
       <div className="p-4 sticky bottom-0">

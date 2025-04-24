@@ -133,3 +133,76 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Markdown styling for chat messages */
+.prose {
+  @apply text-sm;
+}
+
+.prose p {
+  @apply my-2;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+  @apply font-bold my-3;
+}
+
+.prose h1 {
+  @apply text-xl;
+}
+
+.prose h2 {
+  @apply text-lg;
+}
+
+.prose h3 {
+  @apply text-base;
+}
+
+.prose ul, .prose ol {
+  @apply pl-6 my-2;
+}
+
+.prose ul {
+  @apply list-disc;
+}
+
+.prose ol {
+  @apply list-decimal;
+}
+
+.prose li {
+  @apply my-1;
+}
+
+.prose code {
+  @apply bg-[#2a2a2a] px-1 py-0.5 rounded text-xs font-mono;
+}
+
+.prose pre {
+  @apply bg-[#2a2a2a] p-3 rounded-md my-3 overflow-x-auto;
+}
+
+.prose pre code {
+  @apply bg-transparent p-0 text-xs;
+}
+
+.prose blockquote {
+  @apply border-l-4 border-[#3a3a3a] pl-3 italic my-3;
+}
+
+.prose a {
+  @apply text-blue-400 underline;
+}
+
+.prose table {
+  @apply border-collapse my-3 w-full;
+}
+
+.prose th, .prose td {
+  @apply border border-[#3a3a3a] px-2 py-1;
+}
+
+.prose th {
+  @apply bg-[#2a2a2a];
+}
