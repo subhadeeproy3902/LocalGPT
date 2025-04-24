@@ -11,6 +11,7 @@ import * as webllm from "@mlc-ai/web-llm";
 import { InitProgressReport, LogLevel } from "@mlc-ai/web-llm";
 import ReactMarkdown from "react-markdown";
 import PerformanceMonitor from "./performance-monitor";
+import NetworkStatus from "./network-status";
 
 type Message = {
   content: string;
@@ -167,8 +168,9 @@ export default function ChatInterface() {
         console.log("Model is cached, loading from cache");
         setLoadingStage("Loading model from cache...");
       } else if (!isOnline) {
-        console.log("Offline and model not cached - cannot proceed");
-        setLoadingStage("Error: You are offline and the model is not cached");
+        console.log("Offline and model not cached - still rendering interface");
+        setLoadingStage("You are offline and the model is not cached");
+        // Continue to render the interface, but don't try to load the model
         setIsLoading(false);
         return;
       } else {
@@ -254,7 +256,7 @@ export default function ChatInterface() {
     const userMessage = {
       content: input,
       role: "user" as const,
-      timestamp: now
+      timestamp: now,
     };
     setMessages([...messages, userMessage]);
     setInput("");
@@ -275,12 +277,17 @@ export default function ChatInterface() {
 
       // Create configuration for generation without streaming
       const generationConfig = {
-        messages: currentMessages.map(({ role, content }) => ({ role, content })), // Strip timestamp for API
+        messages: currentMessages.map(({ role, content }) => ({
+          role,
+          content,
+        })), // Strip timestamp for API
         stream: false, // Disable streaming for more reliable response
       };
 
       // Start the generation
-      const response = await engine.chat.completions.create(generationConfig) as webllm.ChatCompletion;
+      const response = (await engine.chat.completions.create(
+        generationConfig
+      )) as webllm.ChatCompletion;
 
       // Get the full response
       const fullResponse = response.choices[0].message.content || "";
@@ -288,9 +295,15 @@ export default function ChatInterface() {
       // Simulate streaming with animation in the UI
       let displayedResponse = "";
       const responseLength = fullResponse.length;
-      const animationDuration = Math.min(5000, Math.max(1000, responseLength * 10)); // Between 1-5 seconds based on length
+      const animationDuration = Math.min(
+        5000,
+        Math.max(1000, responseLength * 10)
+      ); // Between 1-5 seconds based on length
       const updateInterval = 50; // Update UI every 50ms
-      const charsPerUpdate = Math.max(1, Math.ceil(responseLength / (animationDuration / updateInterval)));
+      const charsPerUpdate = Math.max(
+        1,
+        Math.ceil(responseLength / (animationDuration / updateInterval))
+      );
 
       let currentIndex = 0;
       const animationInterval = setInterval(() => {
@@ -299,7 +312,10 @@ export default function ChatInterface() {
           return;
         }
 
-        const nextIndex = Math.min(responseLength, currentIndex + charsPerUpdate);
+        const nextIndex = Math.min(
+          responseLength,
+          currentIndex + charsPerUpdate
+        );
         displayedResponse = fullResponse.substring(0, nextIndex);
         currentIndex = nextIndex;
 
@@ -341,7 +357,11 @@ export default function ChatInterface() {
         const conversationHistory = {
           messages: [
             ...currentMessages,
-            { content: fullResponse, role: "assistant" as const, timestamp: now },
+            {
+              content: fullResponse,
+              role: "assistant" as const,
+              timestamp: now,
+            },
           ],
           timestamp: new Date().toISOString(),
         };
@@ -422,6 +442,7 @@ export default function ChatInterface() {
     <div className="flex flex-col justify-between h-full">
       {isLoading ? (
         <div className="flex flex-col items-center justify-center h-full">
+          <NetworkStatus />
           <div className="text-white text-xl mb-4">Loading </div>
           <div className="text-gray-400 text-sm mb-4">{loadingStage}</div>
           <div className="w-64 h-2 bg-[#2a2a2a] rounded-full overflow-hidden">
@@ -455,101 +476,167 @@ export default function ChatInterface() {
             </div>
           )}
         </div>
-      ) : (
+      ) : !engine && !isOnline && !isModelCached ? (
         <div className="relative h-full">
           <PerformanceMonitor />
+          <NetworkStatus />
+
+          <div className="flex flex-col items-center justify-center h-full">
+            <div className="text-white text-xl mb-4">Your LocalGPT</div>
+            <div className="text-gray-400 text-sm mb-4">
+              Interface loaded from cache
+            </div>
+
+            <div className="mt-4 p-3 bg-red-900/30 border border-red-700 rounded-md text-red-300 max-w-md text-center">
+              <p className="font-semibold mb-2">You are currently offline</p>
+              <p>
+                The model is not cached on this device. Connect to the internet
+                to download the model for offline use.
+              </p>
+            </div>
+
+            {messages.length > 1 && (
+              <div className="mt-6">
+                <div className="text-gray-400 text-sm mb-2">
+                  Your conversation history is available:
+                </div>
+                <ScrollArea className="py-4 overflow-y-auto px-4 h-[300px] max-w-md">
+                  {messages
+                    .filter((m) => m.role !== "system")
+                    .map((message, index) => (
+                      <div
+                        key={index}
+                        className="my-2 p-2 bg-[#1a1a1a] rounded-md"
+                      >
+                        <div className="text-xs text-gray-500 mb-1">
+                          {message.role === "user" ? "You" : "Assistant"}
+                        </div>
+                        <div
+                          className={`text-sm ${
+                            message.role === "user"
+                              ? "text-white"
+                              : "text-gray-300"
+                          }`}
+                        >
+                          {message.content}
+                        </div>
+                      </div>
+                    ))}
+                </ScrollArea>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <>
+          <PerformanceMonitor />
+          <NetworkStatus />
 
           {messages.length <= 1 && engine && (
             <div className="flex flex-col items-center justify-center h-full">
-              <div className="text-white text-xl mb-4">Your LocalGPT has been set</div>
-              <div className="text-gray-400 text-sm">Start a conversation by typing a message below</div>
+              <div className="text-white text-xl mb-4">
+                Your LocalGPT has been set
+              </div>
+              <div className="text-gray-400 text-sm">
+                Start a conversation by typing a message below
+              </div>
             </div>
           )}
 
-          <ScrollArea className="py-4 overflow-y-auto px-4 h-full">
-            {messages.length > 1 && messages.filter(m => m.role !== "system").map((message, index) => {
-              // Format timestamp
-              const timestamp = message.timestamp;
-              let timeString = "";
+          <ScrollArea className="mt-12 py-4 overflow-y-auto px-4 h-full">
+            {messages.length > 1 &&
+              messages
+                .filter((m) => m.role !== "system")
+                .map((message, index) => {
+                  // Format timestamp
+                  const timestamp = message.timestamp;
+                  let timeString = "";
 
-              if (timestamp) {
-                const now = new Date();
-                const isToday = timestamp.getDate() === now.getDate() &&
-                                timestamp.getMonth() === now.getMonth() &&
-                                timestamp.getFullYear() === now.getFullYear();
+                  if (timestamp) {
+                    const now = new Date();
+                    const isToday =
+                      timestamp.getDate() === now.getDate() &&
+                      timestamp.getMonth() === now.getMonth() &&
+                      timestamp.getFullYear() === now.getFullYear();
 
-                if (isToday) {
-                  // Show only time for today's messages
-                  timeString = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                } else {
-                  // Show date and time for older messages
-                  timeString = timestamp.toLocaleDateString([], {
-                    month: 'short',
-                    day: 'numeric'
-                  }) + ' ' + timestamp.toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  });
-                }
-              }
+                    if (isToday) {
+                      // Show only time for today's messages
+                      timeString = timestamp.toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      });
+                    } else {
+                      // Show date and time for older messages
+                      timeString =
+                        timestamp.toLocaleDateString([], {
+                          month: "short",
+                          day: "numeric",
+                        }) +
+                        " " +
+                        timestamp.toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        });
+                    }
+                  }
 
-              return (
-                <div
-                  key={index}
-                  className={cn(
-                    "w-fit max-w-[90%] my-4",
-                    message.role === "user" ? "ml-auto" : "mr-auto"
-                  )}
-                >
-                  {message.role === "user" && (
-                    <div className="flex flex-col">
-                      <div className="relative bg-[#2a2a2a] rounded-3xl px-4 py-2 text-white text-base">
-                        {message.content}
-                      </div>
-                      {timestamp && (
-                        <div className="text-xs text-gray-500 mt-1 ml-2">
-                          {timeString}
-                        </div>
+                  return (
+                    <div
+                      key={index}
+                      className={cn(
+                        "w-fit max-w-[90%] my-4",
+                        message.role === "user" ? "ml-auto" : "mr-auto"
                       )}
-                    </div>
-                  )}
-
-                  {message.role === "assistant" && (
-                    <div className="flex flex-col">
-                      <div className="bg-[#1a1a1a] rounded-3xl px-4 py-2 text-white text-sm prose prose-invert max-w-none">
-                        {message.content === "" && isGenerating ? (
-                          <div className="flex space-x-2 mt-2">
-                            <div
-                              className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"
-                              style={{ animationDelay: "0ms" }}
-                            ></div>
-                            <div
-                              className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"
-                              style={{ animationDelay: "300ms" }}
-                            ></div>
-                            <div
-                              className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"
-                              style={{ animationDelay: "600ms" }}
-                            ></div>
+                    >
+                      {message.role === "user" && (
+                        <div className="flex flex-col">
+                          <div className="relative bg-[#2a2a2a] rounded-3xl px-4 py-2 text-white text-base">
+                            {message.content}
                           </div>
-                        ) : (
-                          <ReactMarkdown>{message.content}</ReactMarkdown>
-                        )}
-                      </div>
-                      {timestamp && (
-                        <div className="text-xs text-gray-500 mt-1 ml-2">
-                          {timeString}
+                          {timestamp && (
+                            <div className="text-xs text-gray-500 mt-1 ml-2">
+                              {timeString}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {message.role === "assistant" && (
+                        <div className="flex flex-col">
+                          <div className="bg-[#1a1a1a] rounded-3xl px-4 py-2 text-white text-sm prose prose-invert max-w-none">
+                            {message.content === "" && isGenerating ? (
+                              <div className="flex space-x-2 mt-2">
+                                <div
+                                  className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"
+                                  style={{ animationDelay: "0ms" }}
+                                ></div>
+                                <div
+                                  className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"
+                                  style={{ animationDelay: "300ms" }}
+                                ></div>
+                                <div
+                                  className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"
+                                  style={{ animationDelay: "600ms" }}
+                                ></div>
+                              </div>
+                            ) : (
+                              <ReactMarkdown>{message.content}</ReactMarkdown>
+                            )}
+                          </div>
+                          {timestamp && (
+                            <div className="text-xs text-gray-500 mt-1 ml-2">
+                              {timeString}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
-              );
-            })}
+                  );
+                })}
 
             <div ref={messagesEndRef} />
           </ScrollArea>
-        </div>
+        </>
       )}
 
       <div className="p-4 sticky bottom-0">
@@ -563,7 +650,11 @@ export default function ChatInterface() {
                 }
                 onKeyDown={handleKeyDown}
                 placeholder={
-                  isLoading ? "Loading model..." : "Message LocalGPT..."
+                  isLoading
+                    ? "Loading model..."
+                    : !engine && !isOnline && !isModelCached
+                    ? "Offline - model not available"
+                    : "Message LocalGPT..."
                 }
                 maxRows={5}
                 disabled={isLoading || !engine}
@@ -610,6 +701,8 @@ export default function ChatInterface() {
                 ? `Generating response with model...`
                 : engine
                 ? `Using model (cached and ready for offline use)`
+                : !isOnline && !isModelCached
+                ? `Offline mode - model not available`
                 : "Model not loaded"}
             </p>
 
