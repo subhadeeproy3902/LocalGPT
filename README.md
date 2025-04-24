@@ -9,7 +9,9 @@
 
 LocalGPT is a browser-based AI assistant that runs entirely on your device without requiring an internet connection (after initial model download). It's specifically designed for users in rural areas with limited internet access, allowing you to have AI assistance even when completely offline.
 
-![LocalGPT Screenshot](./assets/images/localgpt-screenshot.png)
+> **Note:** You must first use LocalGPT while online to download the model (400MB-900MB). After downloading, you can use it completely offline. See the [Offline Usage Guide](#-offline-usage-guide) for details.
+
+![LocalGPT Screenshot](./image.png)
 *Screenshot: LocalGPT running in a browser with offline capability*
 
 > Note: Replace the placeholder image with an actual screenshot of your application.
@@ -23,6 +25,8 @@ LocalGPT is a browser-based AI assistant that runs entirely on your device witho
 - **🌐 Network Status Aware**: Shows online/offline status and adapts accordingly
 - **📊 Performance Monitoring**: Real-time CPU/GPU usage metrics
 - **🎨 Modern UI**: Clean, responsive interface that works on desktop and mobile devices
+
+> **Important:** You must first download the model while online before using offline. See the [Offline Usage Guide](#-offline-usage-guide) for details.
 
 ## ⚠️ Response Time Expectations
 
@@ -139,22 +143,32 @@ Choose a model that matches your hardware capabilities for the best experience. 
 
 ## 📱 Offline Usage Guide
 
-To ensure LocalGPT works properly offline:
+> **CRITICAL: YOU MUST FIRST USE LOCALGPT ONLINE TO DOWNLOAD THE MODEL BEFORE USING IT OFFLINE!**
 
-1. **First Visit (Online)**:
-   - Visit the app while you have a stable internet connection
+The LLM model must be downloaded and cached while you have an internet connection before offline use is possible. This is a mandatory first step.
+
+### Step-by-Step Offline Setup
+
+1. **First Visit (MUST BE ONLINE)**:
+   - Open LocalGPT while connected to the internet
    - Wait for the model to fully download (100% on progress bar)
+   - This download is approximately 400MB-900MB depending on the model
+   - The download may take several minutes on slower connections
+   - You'll see "Your LocalGPT has been set" when the model is ready
    - Test the app by sending a few messages to verify it's working
 
 2. **Going Offline**:
-   - Once the model is cached, you can disconnect from the internet
+   - After the model is fully downloaded and cached, you can disconnect from the internet
    - The app will detect offline status and load the model from cache
+   - You'll see "Using model (cached and ready for offline use)" at the bottom
    - All functionality will continue to work without internet
 
 3. **Troubleshooting Offline Issues**:
-   - If the model doesn't load offline, try clearing your browser cache and redownloading
-   - Some browsers limit offline storage - try using Chrome for best results
-   - The app includes diagnostic information to help identify issues
+   - If you see "Offline mode - model not available", it means you didn't complete the online download
+   - You MUST connect to the internet and let the model fully download first
+   - If the model doesn't load offline after downloading, try clearing your browser cache and redownloading
+   - Some browsers limit offline storage - Chrome works best for offline use
+   - The app includes diagnostic information at the bottom to help identify issues
 
 ## 🔧 Performance Tips
 

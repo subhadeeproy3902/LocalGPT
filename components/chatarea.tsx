@@ -81,7 +81,7 @@ export default function ChatInterface() {
       {
         role: "system",
         content:
-          "You are a helpful assistant.",
+          "You are a helpful assistant. You provide answers only in Markdown format",
         timestamp: new Date(),
       },
     ];
@@ -653,7 +653,7 @@ export default function ChatInterface() {
     // Create a new system prompt
     const systemPrompt = {
       role: "system" as const,
-      content: "You are a helpful assistant.",
+      content: "You are a helpful assistant. You provide answers only in Markdown format",
       timestamp: new Date(),
     };
 
