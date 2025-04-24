@@ -2,6 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import { type GPU } from "@webgpu/types";
+
+declare global {
+  interface Navigator {
+    gpu: GPU;
+  }
+}
 
 export default function PerformanceMonitor() {
   const [cpuUsage, setCpuUsage] = useState<number>(0);
