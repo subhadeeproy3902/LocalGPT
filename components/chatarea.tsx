@@ -1,12 +1,5 @@
 "use client";
 
-// Add PWA install prompt type definition
-declare global {
-  interface Window {
-    deferredPrompt: any;
-  }
-}
-
 import type React from "react";
 import { useState, useRef, useEffect } from "react";
 import { Mic, Send } from "lucide-react";
@@ -220,50 +213,6 @@ export default function ChatInterface() {
   // Track GPU errors
   const [hadGpuError, setHadGpuError] = useState<boolean>(false);
 
-  // Register service worker for PWA functionality
-  useEffect(() => {
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      // Register the service worker
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-          .then(registration => {
-            console.log('Service Worker registered with scope:', registration.scope);
-          })
-          .catch(error => {
-            console.error('Service Worker registration failed:', error);
-          });
-      });
-
-      // Listen for service worker updates
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        console.log('Service Worker controller changed');
-      });
-
-      // Handle service worker messages
-      navigator.serviceWorker.addEventListener('message', (event) => {
-        if (event.data && event.data.type === 'CACHE_UPDATED') {
-          console.log('Cache updated by service worker');
-        }
-      });
-
-      // Listen for PWA install prompt
-      window.addEventListener('beforeinstallprompt', (e) => {
-        // Prevent the mini-infobar from appearing on mobile
-        e.preventDefault();
-        // Store the event so it can be triggered later
-        window.deferredPrompt = e;
-        console.log('PWA install prompt ready');
-      });
-
-      // Track when the PWA is installed
-      window.addEventListener('appinstalled', () => {
-        // Clear the deferredPrompt
-        window.deferredPrompt = null;
-        console.log('PWA installed successfully');
-      });
-    }
-  }, []);
-
   // Preload model check - run this early to speed up model loading
   useEffect(() => {
     const preloadModelCheck = async () => {
@@ -312,14 +261,6 @@ export default function ChatInterface() {
                   const db = request.result;
                   if (db.objectStoreNames.contains("models")) {
                     console.log("IndexedDB cache verified and accessible while offline");
-
-                    // Notify service worker that we have a valid cache
-                    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-                      navigator.serviceWorker.controller.postMessage({
-                        type: 'MODEL_CACHED',
-                        modelId: selectedModel
-                      });
-                    }
                   }
                 } catch (e) {
                   console.error("Error accessing IndexedDB while offline:", e);
@@ -328,16 +269,6 @@ export default function ChatInterface() {
             };
           } catch (e) {
             console.error("Error warming up IndexedDB cache:", e);
-          }
-        }
-
-        // Request persistent storage for better offline reliability
-        if (navigator.storage && navigator.storage.persist) {
-          try {
-            const isPersisted = await navigator.storage.persist();
-            console.log(`Persistent storage ${isPersisted ? 'granted' : 'denied'}`);
-          } catch (e) {
-            console.error("Error requesting persistent storage:", e);
           }
         }
       }
@@ -803,7 +734,7 @@ export default function ChatInterface() {
               Interface loaded from cache
             </div>
 
-            <div className="mt-4 p-4 bg-red-900/30 border border-red-700 rounded-md text-red-300 max-w-md text-center">
+            <div className="mt-4 p-3 bg-red-900/30 border border-red-700 rounded-md text-red-300 max-w-md text-center">
               <p className="font-semibold mb-2">You are currently offline</p>
               {!isModelCached ? (
                 <>
@@ -813,42 +744,12 @@ export default function ChatInterface() {
                   <p className="mb-2">
                     Connect to the internet to download the model for offline use.
                   </p>
-                  <div className="flex flex-col gap-2 mt-4">
-                    <button
-                      onClick={() => window.location.reload()}
-                      className="px-4 py-2 bg-red-800 hover:bg-red-700 rounded-md text-white text-sm"
-                    >
-                      Try Again
-                    </button>
-
-                    {/* Add install PWA button if app is not installed */}
-                    <div className="mt-2 p-2 bg-blue-900/30 border border-blue-700 rounded-md text-blue-300">
-                      <p className="text-sm mb-2">
-                        For the best offline experience, install LocalGPT as a PWA:
-                      </p>
-                      <button
-                        onClick={() => {
-                          // Trigger PWA install prompt if available
-                          if (window.deferredPrompt) {
-                            window.deferredPrompt.prompt();
-                            window.deferredPrompt.userChoice.then((choiceResult: any) => {
-                              if (choiceResult.outcome === 'accepted') {
-                                console.log('User accepted the install prompt');
-                              } else {
-                                console.log('User dismissed the install prompt');
-                              }
-                              window.deferredPrompt = null;
-                            });
-                          } else {
-                            alert("To install as an app: In your browser menu, select 'Install LocalGPT' or 'Add to Home Screen'");
-                          }
-                        }}
-                        className="px-4 py-2 bg-blue-800 hover:bg-blue-700 rounded-md text-white text-sm"
-                      >
-                        Install as App
-                      </button>
-                    </div>
-                  </div>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="mt-2 px-4 py-2 bg-red-800 hover:bg-red-700 rounded-md text-white text-sm"
+                  >
+                    Try Again
+                  </button>
                 </>
               ) : (
                 <>
