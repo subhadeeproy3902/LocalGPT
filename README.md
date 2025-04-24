@@ -14,7 +14,8 @@ LocalGPT is a browser-based AI assistant that runs entirely on your device witho
 ![LocalGPT Screenshot](./image.png)
 *Screenshot: LocalGPT running in a browser with offline capability*
 
-> Note: Replace the placeholder image with an actual screenshot of your application.
+![](./online.png)
+*Screenshot: LocalGPT running in a browser with online capability*
 
 ## ✨ Features
 
@@ -193,21 +194,6 @@ To get the best experience with LocalGPT:
 
 7. **Restart Occasionally**: If performance degrades over time, refresh the page
 
-## 🏗️ Building for Production
-
-To create an optimized production build:
-
-```bash
-npm run build
-npm run start
-# or
-yarn build
-yarn start
-# or
-bun build
-bun start
-```
-
 ## 📋 System Requirements
 
 - **Browser**: Chrome 113+ or Edge 113+ with WebGPU support
@@ -218,7 +204,7 @@ bun start
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the [MIT LICENSE](./LICENCE) - see the LICENSE file for details.
 
 ## 🙏 Acknowledgements
 
