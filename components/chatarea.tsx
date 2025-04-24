@@ -1,97 +1,559 @@
-"use client"
+"use client";
 
-import type React from "react"
-import { useState, useRef, useEffect } from "react"
-import { Plus, Search, Sparkles, ImageIcon, Mic, MoreHorizontal, Send } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import AutoResizeTextarea from "./autosize-textarea"
-import { cn } from "@/lib/utils"
-import { ScrollArea } from "./ui/scroll-area"
+import type React from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
+import {
+  Plus,
+  Search,
+  Sparkles,
+  ImageIcon,
+  Mic,
+  MoreHorizontal,
+  Send,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import AutoResizeTextarea from "./autosize-textarea";
+import { cn } from "@/lib/utils";
+import { ScrollArea } from "./ui/scroll-area";
 import * as webllm from "@mlc-ai/web-llm";
+import { InitProgressReport, LogLevel } from "@mlc-ai/web-llm";
 
 type Message = {
-  content: string
-  role: "user" | "assistant" | "system"
-}
+  content: string;
+  role: "user" | "assistant" | "system";
+};
 
 export default function ChatInterface() {
-  const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState("")
-  const [engine, setEngine] = useState<webllm.MLCEngine>()
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  // Initialize messages from localStorage if available
+  const [messages, setMessages] = useState<Message[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const savedConversation = localStorage.getItem("conversationHistory");
+        if (savedConversation) {
+          const parsed = JSON.parse(savedConversation);
+          // Check if the saved conversation is less than 24 hours old
+          const timestamp = new Date(parsed.timestamp);
+          const now = new Date();
+          const hoursSinceLastConversation = (now.getTime() - timestamp.getTime()) / (1000 * 60 * 60);
 
+          if (hoursSinceLastConversation < 24 && Array.isArray(parsed.messages)) {
+            console.log("Restored conversation from localStorage");
+            return parsed.messages;
+          }
+        }
+      } catch (e) {
+        console.log("Could not restore conversation from localStorage:", e);
+      }
+    }
+    return [
+      {
+        role: "system",
+        content: "You are a helpful assistant. You provide markdown coded responses only.",
+      }
+    ];
+  });
+  const [input, setInput] = useState("");
+  const [engine, setEngine] = useState<webllm.MLCEngine>();
+  const [isLoading, setIsLoading] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [modelName, setModelName] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Check if the browser is online
+  const [isOnline, setIsOnline] = useState<boolean>(
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
+
+  // Track if model is cached
+  const [isModelCached, setIsModelCached] = useState<boolean>(false);
+  const [loadingStage, setLoadingStage] = useState<string>("Checking cache...");
+
+  // Listen for online/offline events
   useEffect(() => {
-    const selectedModel = "Llama-3.1-8B-Instruct-q4f32_1-MLC"
-    webllm.CreateMLCEngine(selectedModel, {
-      initProgressCallback: (progress) => {
-        console.log("Loading model: " + progress.progress + " %" + " time: " + progress.timeElapsed + "ms");
-      },
-    }).then ((engine) => {
-      setEngine(engine);
-    });
-  }, [])
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Check if model is cached in IndexedDB
+  const checkModelCache = async (_modelId: string): Promise<boolean> => {
+    console.log("Model: Checking cache for model: ", _modelId);
+    try {
+      // Try to open the IndexedDB database
+      const dbName = "webllm-indexeddb-cache";
+      const request = indexedDB.open(dbName);
+
+      return new Promise((resolve) => {
+        request.onerror = () => {
+          console.log("IndexedDB access denied or not available");
+          resolve(false);
+        };
+
+        request.onsuccess = () => {
+          const db = request.result;
+          // Check if the model store exists and has entries
+          if (!db.objectStoreNames.contains("models")) {
+            console.log("No models store found");
+            resolve(false);
+            return;
+          }
+
+          try {
+            const transaction = db.transaction("models", "readonly");
+            const store = transaction.objectStore("models");
+            const countRequest = store.count();
+
+            countRequest.onsuccess = () => {
+              const hasEntries = countRequest.result > 0;
+              console.log(`Model cache check: ${hasEntries ? "Found cached data" : "No cached data found"}`);
+              resolve(hasEntries);
+            };
+
+            countRequest.onerror = () => {
+              console.log("Error checking model cache");
+              resolve(false);
+            };
+          } catch (e) {
+            console.log("Error accessing models store:", e);
+            resolve(false);
+          }
+        };
+      });
+    } catch (e) {
+      console.log("Error checking cache:", e);
+      return false;
+    }
+  };
+
+  // Available models in order of increasing size/quality
+  const availableModels = useMemo(() => [
+    { id: "SmolLM2-360M-Instruct-q4f16_1-MLC", name: "SmolLM2-360M (Tiny - 360MB)", memoryRequired: "~400MB" },
+    { id: "SmolLM2-1.7B-Instruct-q4f16_1-MLC", name: "SmolLM2-1.7B (Small - 1.7GB)", memoryRequired: "~1.8GB" },
+    { id: "Phi-3.5-mini-instruct-q4f16_1-MLC-1k", name: "Phi-3.5-mini (Medium - 3.8GB)", memoryRequired: "~2.5GB" },
+    { id: "Gemma-2-2b-it-q4f16_1-MLC-1k", name: "Gemma-2-2B (Medium - 2GB)", memoryRequired: "~1.6GB" },
+  ], []);
+
+  // State for model selector
+  const [selectedModelIndex, setSelectedModelIndex] = useState<number>(() => {
+    // Try to get the last successful model from localStorage
+    if (typeof window !== 'undefined') {
+      const lastModel = localStorage.getItem("lastSuccessfulModel");
+      if (lastModel) {
+        const index = availableModels.findIndex(model => model.id === lastModel);
+        if (index !== -1) return index;
+      }
+    }
+    // Default to the smallest model for safety
+    return 0;
+  });
+
+  // State for low memory mode
+  const [lowMemoryMode, setLowMemoryMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem("lowMemoryMode") === "true";
+    }
+    return false;
+  });
+
+  // Track GPU errors
+  const [hadGpuError, setHadGpuError] = useState<boolean>(false);
+
+  // Load model effect
+  useEffect(() => {
+    const loadModel = async () => {
+      // Get the selected model
+      const modelInfo = availableModels[selectedModelIndex];
+      const selectedModel = modelInfo.id;
+
+      setIsLoading(true);
+      setModelName(modelInfo.name);
+      setHadGpuError(false);
+
+      // Check if model is cached
+      setLoadingStage(`Checking if ${modelInfo.name} is cached...`);
+      const isCached = await checkModelCache(selectedModel);
+      setIsModelCached(isCached);
+
+      if (isCached) {
+        console.log("Model is cached, loading from cache");
+        setLoadingStage("Loading model from cache...");
+      } else if (!isOnline) {
+        console.log("Offline and model not cached - cannot proceed");
+        setLoadingStage("Error: You are offline and the model is not cached");
+        setIsLoading(false);
+        return;
+      } else {
+        console.log("Model not cached, downloading...");
+        setLoadingStage(`Downloading model (${modelInfo.memoryRequired} required)...`);
+      }
+
+      // Configure the engine with IndexedDB caching for better offline support
+      const engineConfig: webllm.MLCEngineConfig = {
+        appConfig: {
+          ...webllm.prebuiltAppConfig,
+          useIndexedDBCache: true, // Enable IndexedDB caching for offline use
+        },
+        initProgressCallback: (progress: InitProgressReport) => {
+          // Update loading stage based on progress text
+          if (progress.text) {
+            if (progress.text.includes("cache")) {
+              setLoadingStage("Loading from cache...");
+            } else if (progress.text.includes("download")) {
+              setLoadingStage("Downloading model files...");
+            } else if (progress.text.includes("initialize")) {
+              setLoadingStage("Initializing model...");
+            }
+            console.log(progress.text);
+          }
+
+          setLoadingProgress(progress.progress);
+        },
+        logLevel: "INFO" as LogLevel // Set to INFO to see more detailed logs
+      };
+
+      try {
+        console.log("Creating MLCEngine for model:", selectedModel);
+        const engine = await webllm.CreateMLCEngine(selectedModel, engineConfig);
+        console.log("Model loaded successfully");
+        setEngine(engine);
+        setIsLoading(false);
+        // Save to localStorage that we've successfully loaded this model
+        localStorage.setItem("lastSuccessfulModel", selectedModel);
+      } catch (error) {
+        console.error("Error loading model:", error);
+
+        // Check if this was a GPU memory error
+        const errorString = String(error);
+        const isGpuMemoryError = errorString.includes("Device was lost") ||
+                                errorString.includes("GPU") ||
+                                errorString.includes("memory") ||
+                                errorString.includes("DXGI_ERROR");
+
+        if (isGpuMemoryError) {
+          setHadGpuError(true);
+          setLoadingStage("GPU memory error detected. Try a smaller model or enable low memory mode.");
+
+          // If not already in low memory mode, suggest it
+          if (!lowMemoryMode) {
+            setLoadingStage("GPU memory error. Try enabling low memory mode below.");
+          } else if (selectedModelIndex > 0) {
+            // If already in low memory mode, suggest an even smaller model
+            setLoadingStage("GPU memory error. Try selecting a smaller model below.");
+          } else {
+            setLoadingStage("Your device doesn't have enough GPU memory for any model. Try on a different device.");
+          }
+        } else if (!isOnline) {
+          setLoadingStage("Error: You are offline and the model failed to load from cache");
+        } else {
+          setLoadingStage("Failed to load model. Please try again later.");
+        }
+
+        setIsLoading(false);
+      }
+    };
+
+    loadModel();
+  }, [isOnline, selectedModelIndex, lowMemoryMode, availableModels]);
 
   const handleSendMessage = async () => {
-    if (!input.trim()) return;
-    setMessages([...messages, { content: input, role: "user" }])
-    setInput("")
-    const reply = await engine!.chat.completions.create({
-      messages,
-    })
+    if (!input.trim() || !engine || isGenerating) return;
 
-    console.log(reply)
-  }
+    const userMessage = { content: input, role: "user" as const };
+    setMessages([...messages, userMessage]);
+    setInput("");
+    setIsGenerating(true);
+
+    // Store messages for this conversation to avoid state update issues
+    const currentMessages = [...messages, userMessage];
+
+    try {
+      // Add a temporary loading message
+      setMessages((prev) => [
+        ...prev,
+        { content: "", role: "assistant" as const },
+      ]);
+
+      // Use streaming for faster initial response
+      const startTime = performance.now();
+
+      // Create a more efficient configuration for generation
+      const generationConfig = {
+        messages: currentMessages,
+        stream: true, // Enable streaming for faster response
+        temperature: 0.7, // Add some creativity but not too random
+        top_p: 0.9, // Slightly more focused sampling
+      };
+
+      // Start the generation
+      const response = await engine.chat.completions.create(generationConfig);
+
+      let fullResponse = "";
+      let lastUpdateTime = performance.now();
+      const updateInterval = 50; // Update UI every 50ms at most to avoid excessive re-renders
+
+      // Check if response is streaming or not
+      if ('choices' in response && !('delta' in response.choices[0])) {
+        // Non-streaming response
+        fullResponse = response.choices[0].message.content || "";
+
+        // Update the message with the full response
+        setMessages((prev) => [
+          ...prev.slice(0, prev.length - 1),
+          {
+            content: fullResponse,
+            role: "assistant" as const,
+          },
+        ]);
+      } else {
+        // Streaming response - handle as AsyncIterable
+        const chunks = response as AsyncIterable<webllm.ChatCompletionChunk>;
+
+        // Process each chunk as it arrives
+        for await (const chunk of chunks) {
+          if (chunk.choices[0]?.delta.content) {
+            fullResponse += chunk.choices[0].delta.content;
+
+            // Only update the UI periodically to avoid excessive re-renders
+            const currentTime = performance.now();
+            if (currentTime - lastUpdateTime > updateInterval) {
+              // Update the message with the current accumulated response
+              setMessages((prev) => [
+                ...prev.slice(0, prev.length - 1),
+                {
+                  content: fullResponse,
+                  role: "assistant" as const,
+                },
+              ]);
+              lastUpdateTime = currentTime;
+            }
+          }
+        }
+      }
+
+      // Final update to ensure we have the complete response
+      setMessages((prev) => [
+        ...prev.slice(0, prev.length - 1),
+        {
+          content: fullResponse,
+          role: "assistant" as const,
+        },
+      ]);
+
+      const endTime = performance.now();
+      console.log(`Response generated in ${(endTime - startTime).toFixed(2)}ms`);
+
+      // Cache the conversation in localStorage for quick recovery if browser refreshes
+      try {
+        const conversationHistory = {
+          messages: [...currentMessages, { content: fullResponse, role: "assistant" as const }],
+          timestamp: new Date().toISOString()
+        };
+        localStorage.setItem("conversationHistory", JSON.stringify(conversationHistory));
+      } catch (e) {
+        console.log("Could not save conversation to localStorage:", e);
+      }
+
+    } catch (error) {
+      console.error("Error generating response:", error);
+
+      // Replace the loading message with an error message
+      setMessages((prev) => [
+        ...prev.slice(0, prev.length - 1),
+        {
+          content:
+            "Sorry, I encountered an error while generating a response. Please try again.",
+          role: "assistant" as const,
+        },
+      ]);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   // Scroll to bottom whenever messages change
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      handleSendMessage()
+      e.preventDefault();
+      handleSendMessage();
     }
-  }
+  };
+
+  // Function to clear conversation and optionally clear model cache
+  const clearConversation = (clearCache = false) => {
+    // Clear conversation
+    setMessages([
+      {
+        role: "system",
+        content: "You are a helpful assistant. You provide markdown coded responses only.",
+      }
+    ]);
+
+    // Clear localStorage
+    localStorage.removeItem("conversationHistory");
+
+    // Optionally clear model cache
+    if (clearCache && typeof window !== 'undefined') {
+      try {
+        // Delete the IndexedDB database to clear model cache
+        const dbName = "webllm-indexeddb-cache";
+        const request = indexedDB.deleteDatabase(dbName);
+
+        request.onsuccess = () => {
+          console.log("Model cache cleared successfully");
+          // Reload the page to restart the model loading process
+          window.location.reload();
+        };
+
+        request.onerror = () => {
+          console.error("Error clearing model cache");
+        };
+      } catch (e) {
+        console.error("Error clearing cache:", e);
+      }
+    }
+  };
 
   return (
     <div className="flex flex-col justify-between h-full">
-      <ScrollArea className="py-4 overflow-y-auto px-4 h-full">
-        {messages.map((message, index) => (
-          <div key={index} className={cn("w-fit max-w-[90%] my-4", message.role === "user" ? "place-self-end" : "self-end")}>
-            {message.role === "user"&& (
-              <div
-                className="relative bg-[#2a2a2a] rounded-3xl px-4 py-2 text-white text-base"
-              >
-                {message.content}
-              </div>
-            )}
-
-            {message.role === "assistant" && (
-              <div className="text-white text-sm">
-                <div dangerouslySetInnerHTML={{ __html: message.content.replace(/•/g, "<br/>• ") }} />
-              </div>
-            )}
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center h-full">
+          <div className="text-white text-xl mb-4">Loading {modelName}</div>
+          <div className="text-gray-400 text-sm mb-4">{loadingStage}</div>
+          <div className="w-64 h-2 bg-[#2a2a2a] rounded-full overflow-hidden">
+            <div
+              className="h-full bg-blue-500 transition-all duration-300"
+              style={{ width: `${loadingProgress * 100}%` }}
+            ></div>
           </div>
-        ))}
+          <div className="text-white mt-2">
+            {(loadingProgress * 100).toFixed(2)}%
+          </div>
 
-        {/* {isLoading && (
-          <div className="self-end max-w-[90%]">
-            <div className="flex space-x-2">
-              <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "0ms" }}></div>
-              <div
-                className="w-2 h-2 rounded-full bg-gray-400 animate-bounce"
-                style={{ animationDelay: "150ms" }}
-              ></div>
-              <div
-                className="w-2 h-2 rounded-full bg-gray-400 animate-bounce"
-                style={{ animationDelay: "300ms" }}
-              ></div>
+          {!isOnline && (
+            <div className="mt-4 p-3 bg-red-900/30 border border-red-700 rounded-md text-red-300">
+              You are currently offline. {isModelCached ?
+                "Loading model from cache..." :
+                "Cannot load model without internet connection."}
+            </div>
+          )}
+
+          {isModelCached && (
+            <div className="mt-4 p-3 bg-green-900/30 border border-green-700 rounded-md text-green-300">
+              Model found in cache. Loading locally...
+            </div>
+          )}
+
+          {hadGpuError && (
+            <div className="mt-4 p-3 bg-yellow-900/30 border border-yellow-700 rounded-md text-yellow-300">
+              GPU memory error detected. Try the options below:
+            </div>
+          )}
+
+          {/* Model selection */}
+          <div className="mt-6 w-80 p-4 bg-[#2a2a2a] rounded-lg">
+            <h3 className="text-white text-sm font-medium mb-2">Select Model Size</h3>
+            <div className="space-y-2">
+              {availableModels.map((model, index) => (
+                <div
+                  key={model.id}
+                  className={`p-2 rounded cursor-pointer flex items-center ${
+                    selectedModelIndex === index
+                      ? 'bg-blue-900/50 border border-blue-500'
+                      : 'hover:bg-[#3a3a3a]'
+                  }`}
+                  onClick={() => {
+                    setSelectedModelIndex(index);
+                    localStorage.setItem("lastSelectedModel", model.id);
+                  }}
+                >
+                  <div className={`w-3 h-3 rounded-full mr-2 ${
+                    selectedModelIndex === index ? 'bg-blue-500' : 'bg-gray-600'
+                  }`}></div>
+                  <div>
+                    <div className="text-white text-xs">{model.name}</div>
+                    <div className="text-gray-400 text-xs">Memory: {model.memoryRequired}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Low memory mode toggle */}
+            <div className="mt-4">
+              <label className="flex items-center cursor-pointer">
+                <div
+                  className={`w-10 h-5 rounded-full p-1 transition-colors ${
+                    lowMemoryMode ? 'bg-blue-600' : 'bg-gray-600'
+                  }`}
+                  onClick={() => {
+                    const newValue = !lowMemoryMode;
+                    setLowMemoryMode(newValue);
+                    localStorage.setItem("lowMemoryMode", String(newValue));
+                  }}
+                >
+                  <div
+                    className={`bg-white w-3 h-3 rounded-full transform transition-transform ${
+                      lowMemoryMode ? 'translate-x-5' : ''
+                    }`}
+                  ></div>
+                </div>
+                <span className="ml-2 text-white text-xs">Low Memory Mode (CPU fallback)</span>
+              </label>
+              <p className="text-gray-400 text-xs mt-1">
+                Enable this if you experience GPU memory errors. Will be slower but more reliable.
+              </p>
             </div>
           </div>
-        )} */}
-        <div ref={messagesEndRef} />
-      </ScrollArea>
+        </div>
+      ) : (
+        <ScrollArea className="py-4 overflow-y-auto px-4 h-full">
+          {messages.map((message, index) => (
+            <div
+              key={index}
+              className={cn(
+                "w-fit max-w-[90%] my-4",
+                message.role === "user" ? "place-self-end" : "self-end"
+              )}
+            >
+              {message.role === "user" && (
+                <div className="relative bg-[#2a2a2a] rounded-3xl px-4 py-2 text-white text-base">
+                  {message.content}
+                </div>
+              )}
+
+              {message.role === "assistant" && (
+                <div className="text-white text-sm">
+                  <div
+                    dangerouslySetInnerHTML={{
+                      __html: message.content.replace(/•/g, "<br/>• "),
+                    }}
+                  />
+                  {message.content === "" && isGenerating && (
+                    <div className="flex space-x-2 mt-2">
+                      <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" style={{ animationDelay: "0ms" }}></div>
+                      <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" style={{ animationDelay: "300ms" }}></div>
+                      <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" style={{ animationDelay: "600ms" }}></div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+
+          <div ref={messagesEndRef} />
+        </ScrollArea>
+      )}
 
       <div className="p-4 sticky bottom-0">
         <div className="relative">
@@ -99,13 +561,16 @@ export default function ChatInterface() {
             <div className="flex items-center p-2">
               <AutoResizeTextarea
                 value={input}
-                onChange={(e:
-                  React.ChangeEvent<HTMLTextAreaElement>
-                ) => setInput(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                  setInput(e.target.value)
+                }
                 onKeyDown={handleKeyDown}
-                placeholder="Message ChatGPT..."
+                placeholder={
+                  isLoading ? "Loading model..." : "Message LocalGPT..."
+                }
                 maxRows={5}
-                className="min-h-[24px] py-1 px-2 bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-white resize-none flex-1 text-sm"
+                disabled={isLoading || !engine}
+                className="min-h-[24px] py-1 px-2 bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-white resize-none flex-1 text-sm disabled:opacity-50"
               />
             </div>
 
@@ -114,6 +579,7 @@ export default function ChatInterface() {
                 size="icon"
                 variant="ghost"
                 className="h-8 w-8 rounded-full text-gray-400 hover:text-white hover:bg-[#3a3a3a]"
+                disabled={isLoading || !engine}
               >
                 <Plus className="h-4 w-4" />
               </Button>
@@ -121,6 +587,7 @@ export default function ChatInterface() {
               <Button
                 variant="ghost"
                 className="h-8 rounded-full text-gray-400 hover:text-white hover:bg-[#3a3a3a] px-3 text-xs flex items-center gap-1"
+                disabled={isLoading || !engine}
               >
                 <Search className="h-4 w-4" />
                 <span>Search</span>
@@ -129,6 +596,7 @@ export default function ChatInterface() {
               <Button
                 variant="ghost"
                 className="h-8 rounded-full text-gray-400 hover:text-white hover:bg-[#3a3a3a] px-3 text-xs flex items-center gap-1"
+                disabled={isLoading || !engine}
               >
                 <Sparkles className="h-4 w-4" />
                 <span>Reason</span>
@@ -137,6 +605,7 @@ export default function ChatInterface() {
               <Button
                 variant="ghost"
                 className="h-8 rounded-full text-gray-400 hover:text-white hover:bg-[#3a3a3a] px-3 text-xs flex items-center gap-1"
+                disabled={isLoading || !engine}
               >
                 <ImageIcon className="h-4 w-4" />
                 <span>Create image</span>
@@ -146,6 +615,7 @@ export default function ChatInterface() {
                 size="icon"
                 variant="ghost"
                 className="h-8 w-8 rounded-full text-gray-400 hover:text-white hover:bg-[#3a3a3a]"
+                disabled={isLoading || !engine}
               >
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
@@ -156,6 +626,7 @@ export default function ChatInterface() {
                 size="icon"
                 variant="ghost"
                 className="h-8 w-8 rounded-full text-gray-400 hover:text-white hover:bg-[#3a3a3a]"
+                disabled={isLoading || !engine}
               >
                 <Mic className="h-4 w-4" />
               </Button>
@@ -163,17 +634,53 @@ export default function ChatInterface() {
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-8 w-8 rounded-full bg-white text-black hover:bg-gray-200"
+                className={`h-8 w-8 rounded-full ${
+                  isGenerating
+                    ? "bg-blue-500 text-white hover:bg-blue-600"
+                    : "bg-white text-black hover:bg-gray-200"
+                } disabled:opacity-50 disabled:bg-gray-400`}
                 onClick={handleSendMessage}
-                disabled={!input.trim()}
+                disabled={!input.trim() || isLoading || !engine || isGenerating}
               >
-                <Send className="h-4 w-4" />
+                {isGenerating ? (
+                  <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
               </Button>
             </div>
           </div>
-          <p className="text-xs text-gray-500 text-center mt-2">ChatGPT can make mistakes. Check important info.</p>
+          <div className="flex flex-col items-center mt-2">
+            <p className="text-xs text-gray-500 text-center">
+              {isLoading
+                ? `Loading ${modelName}...`
+                : isGenerating
+                ? `Generating response with ${modelName}...`
+                : engine
+                ? `Using ${modelName} (cached and ready for offline use)`
+                : "Model not loaded"}
+            </p>
+
+            {!isLoading && engine && messages.length > 1 && (
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={() => clearConversation(false)}
+                  className="text-xs text-gray-400 hover:text-white transition-colors"
+                >
+                  Clear Chat
+                </button>
+                <span className="text-gray-600">|</span>
+                <button
+                  onClick={() => clearConversation(true)}
+                  className="text-xs text-gray-400 hover:text-white transition-colors"
+                >
+                  Clear Cache & Reload
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
-  )
+  );
 }
