@@ -14,7 +14,8 @@ LocalGPT is a browser-based AI assistant that runs entirely on your device witho
 ![LocalGPT Screenshot](./image.png)
 *Screenshot: LocalGPT running in a browser with offline capability*
 
-> Note: Replace the placeholder image with an actual screenshot of your application.
+![](./online.png)
+*Screenshot: LocalGPT running in a browser with online capability*
 
 ## ✨ Features
 
@@ -208,33 +209,6 @@ To get the best experience with LocalGPT:
 
 7. **Restart Occasionally**: If performance degrades over time, refresh the page
 
-## 🏗️ Building for Production
-
-To create an optimized production build:
-
-```bash
-npm run build
-npm run start
-# or
-yarn build
-yarn start
-# or
-bun build
-bun start
-```
-
-### Deploying to a Production URL
-
-When deploying to a production URL, the PWA and offline functionality will work automatically. The service worker will be registered and the app will be installable as a PWA.
-
-1. **Build the project** using the commands above
-2. **Deploy the build** to your hosting provider (Vercel, Netlify, etc.)
-3. **Visit your production URL** and verify that the app works
-4. **Download the model** while online to enable offline functionality
-5. **Install as a PWA** for the best offline experience
-
-Note that the model cache is domain-specific, so users will need to download the model once for each domain where LocalGPT is hosted.
-
 ## 📋 System Requirements
 
 - **Browser**: Chrome 113+ or Edge 113+ with WebGPU support
@@ -245,7 +219,7 @@ Note that the model cache is domain-specific, so users will need to download the
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the [MIT LICENSE](./LICENCE) - see the LICENSE file for details.
 
 ## 🙏 Acknowledgements
 
