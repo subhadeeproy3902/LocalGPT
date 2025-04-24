@@ -38,7 +38,16 @@ export default function ChatInterface() {
             Array.isArray(parsed.messages)
           ) {
             console.log("Restored conversation from localStorage");
-            return parsed.messages;
+            // Convert string timestamps back to Date objects
+            const messagesWithProperDates = parsed.messages.map((msg: {
+              content: string;
+              role: "user" | "assistant" | "system";
+              timestamp?: string;
+            }) => ({
+              ...msg,
+              timestamp: msg.timestamp ? new Date(msg.timestamp) : undefined
+            }));
+            return messagesWithProperDates;
           }
         }
       } catch (e) {
@@ -500,28 +509,56 @@ export default function ChatInterface() {
                 <div className="text-gray-400 text-sm mb-2">
                   Your conversation history is available:
                 </div>
-                <ScrollArea className="py-4 overflow-y-auto px-4 h-[300px] max-w-md">
+                <ScrollArea className="py-4 flex flex-col overflow-y-auto px-4 h-[300px] max-w-md">
                   {messages
                     .filter((m) => m.role !== "system")
-                    .map((message, index) => (
-                      <div
-                        key={index}
-                        className="my-2 p-2 bg-[#1a1a1a] rounded-md"
-                      >
-                        <div className="text-xs text-gray-500 mb-1">
-                          {message.role === "user" ? "You" : "Assistant"}
-                        </div>
+                    .map((message, index) => {
+                      // Format timestamp for display
+                      let timeString = "";
+                      const timestamp = message.timestamp;
+
+                      if (timestamp && timestamp instanceof Date && !isNaN(timestamp.getTime())) {
+                        timeString = timestamp.toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        });
+                      } else if (timestamp) {
+                        try {
+                          const dateObj = new Date(timestamp);
+                          if (!isNaN(dateObj.getTime())) {
+                            timeString = dateObj.toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            });
+                          }
+                        } catch (e) {
+                          console.log("Error formatting timestamp:", e);
+                        }
+                      }
+
+                      return (
                         <div
-                          className={`text-sm ${
-                            message.role === "user"
-                              ? "text-white"
-                              : "text-gray-300"
-                          }`}
+                          key={index}
+                          className="my-2 p-2 bg-[#1a1a1a] rounded-md"
                         >
-                          {message.content}
+                          <div className="flex justify-between items-center mb-1">
+                            <div className="text-xs text-gray-500">
+                              {message.role === "user" ? "You" : "Assistant"}
+                            </div>
+                            {timeString && <div className="text-xs text-gray-600">{timeString}</div>}
+                          </div>
+                          <div
+                            className={`text-sm ${
+                              message.role === "user"
+                                ? "text-white"
+                                : "text-gray-300"
+                            }`}
+                          >
+                            {message.content}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                 </ScrollArea>
               </div>
             )}
@@ -543,7 +580,7 @@ export default function ChatInterface() {
             </div>
           )}
 
-          <ScrollArea className="mt-12 py-4 overflow-y-auto px-4 h-full">
+          <ScrollArea className="mt-12 flex flex-col py-4 overflow-y-auto px-4 h-full">
             {messages.length > 1 &&
               messages
                 .filter((m) => m.role !== "system")
@@ -552,7 +589,8 @@ export default function ChatInterface() {
                   const timestamp = message.timestamp;
                   let timeString = "";
 
-                  if (timestamp) {
+                  if (timestamp && timestamp instanceof Date && !isNaN(timestamp.getTime())) {
+                    // Ensure timestamp is a valid Date object
                     const now = new Date();
                     const isToday =
                       timestamp.getDate() === now.getDate() &&
@@ -578,14 +616,27 @@ export default function ChatInterface() {
                           minute: "2-digit",
                         });
                     }
+                  } else if (timestamp) {
+                    // If timestamp exists but isn't a valid Date, try to convert it
+                    try {
+                      const dateObj = new Date(timestamp);
+                      if (!isNaN(dateObj.getTime())) {
+                        timeString = dateObj.toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        });
+                      }
+                    } catch (e) {
+                      console.log("Error formatting timestamp:", e);
+                    }
                   }
 
                   return (
                     <div
                       key={index}
                       className={cn(
-                        "w-fit max-w-[90%] my-4",
-                        message.role === "user" ? "ml-auto" : "mr-auto"
+                        "my-4",
+                        message.role === "user" ? "ml-auto w-fit max-w-[90%]" : "w-full mr-auto"
                       )}
                     >
                       {message.role === "user" && (
