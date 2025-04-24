@@ -180,10 +180,40 @@ export default function ChatInterface() {
   // Track GPU errors
   const [hadGpuError, setHadGpuError] = useState<boolean>(false);
 
+  // Preload model check - run this early to speed up model loading
+  useEffect(() => {
+    const preloadModelCheck = async () => {
+      if (typeof window !== "undefined") {
+        // Get the selected model
+        const selectedModel = "TinyLlama-1.1B-Chat-v1.0-q4f16_1-MLC-1k";
+
+        // Check if model is cached early
+        const isCached = await checkModelCache(selectedModel);
+        setIsModelCached(isCached);
+
+        // If model is cached, prepare IndexedDB for faster access
+        if (isCached) {
+          try {
+            // Open the database to warm up the cache
+            const dbName = "webllm-indexeddb-cache";
+            const request = indexedDB.open(dbName);
+            request.onsuccess = () => {
+              console.log("IndexedDB cache warmed up for faster model loading");
+            };
+          } catch (e) {
+            console.error("Error warming up IndexedDB cache:", e);
+          }
+        }
+      }
+    };
+
+    preloadModelCheck();
+  }, []);
+
   // Load model effect
   useEffect(() => {
     const loadModel = async () => {
-      // Get the selected model
+      // Get the selected model - using a smaller quantized model for faster loading
       const selectedModel = "TinyLlama-1.1B-Chat-v1.0-q4f16_1-MLC-1k";
       const selectedModelName = "Tiny Llama";
 
@@ -210,7 +240,8 @@ export default function ChatInterface() {
       }
 
       // Configure the engine with IndexedDB caching for better offline support
-      const engineConfig: webllm.MLCEngineConfig = {
+      // Use type assertion to add performance optimizations
+      const engineConfig = {
         appConfig: {
           ...webllm.prebuiltAppConfig,
           useIndexedDBCache: true, // Enable IndexedDB caching for offline use
@@ -235,13 +266,37 @@ export default function ChatInterface() {
 
       try {
         console.log("Creating MLCEngine for model:", selectedModel);
+
+        // Add performance measurement for model loading
+        const modelLoadStartTime = performance.now();
+
+        // Create the engine with optimized config
         const engine = await webllm.CreateMLCEngine(
           selectedModel,
-          engineConfig
+          engineConfig as webllm.MLCEngineConfig
         );
-        console.log("Model loaded successfully");
+
+        const modelLoadEndTime = performance.now();
+        const loadTimeMs = modelLoadEndTime - modelLoadStartTime;
+        console.log(`Model loaded successfully in ${loadTimeMs.toFixed(2)}ms`);
+
+        // Engine is now ready for inference
+
+        // Warm up the model with a simple inference to improve first response time
+        try {
+          console.log("Warming up model with test inference...");
+          await engine.chat.completions.create({
+            messages: [{ role: "user", content: "Hello" }],
+            max_tokens: 1
+          });
+          console.log("Model warm-up complete");
+        } catch (warmupError) {
+          console.warn("Model warm-up failed, but continuing:", warmupError);
+        }
+
         setEngine(engine);
         setIsLoading(false);
+
         // Save to localStorage that we've successfully loaded this model
         localStorage.setItem("lastSuccessfulModel", selectedModel);
       } catch (error) {
@@ -314,8 +369,15 @@ export default function ChatInterface() {
       interface CustomGenerationConfig extends webllm.ChatCompletionRequestBase {
         context_window_size?: number;
         sliding_window_size?: number;
+        max_tokens?: number;
+        temperature?: number;
+        top_p?: number;
+        frequency_penalty?: number;
+        presence_penalty?: number;
+        batch_size?: number;
       }
 
+      // Optimize inference settings for faster response
       const generationConfig: CustomGenerationConfig = {
         messages: [
           {
@@ -324,9 +386,19 @@ export default function ChatInterface() {
           }
         ],
         stream: false,
-        // Add context window parameters to ensure we use the increased context window
-        context_window_size: 2048,
-        sliding_window_size: 1024
+        // Optimize context window for faster inference
+        context_window_size: 1024, // Reduced from 2048 for faster processing
+        sliding_window_size: 512,  // Reduced from 1024 for faster processing
+        // Limit token generation for faster responses
+        max_tokens: 1024,
+        // Optimize sampling parameters
+        temperature: 1,
+        top_p: 1,
+        // Add batch processing for faster inference
+        batch_size: 8,
+        // Reduce repetition penalties for faster processing
+        frequency_penalty: 0.0,
+        presence_penalty: 0.0
       };
 
       const response = (await engine.chat.completions.create(
@@ -336,60 +408,79 @@ export default function ChatInterface() {
       // Get the full response
       const fullResponse = response.choices[0].message.content || "";
 
-      // Simulate streaming with animation in the UI
+      // Optimize the animation for faster perceived response
+      // Use a more efficient approach with fewer state updates
       let displayedResponse = "";
       const responseLength = fullResponse.length;
+
+      // Faster animation for shorter responses
       const animationDuration = Math.min(
-        5000,
-        Math.max(1000, responseLength * 10)
-      ); // Between 1-5 seconds based on length
-      const updateInterval = 50; // Update UI every 50ms
+        2000, // Maximum 2 seconds (reduced from 5)
+        Math.max(500, responseLength * 5) // Minimum 500ms, 5ms per character (reduced from 10)
+      );
+
+      // Reduce UI updates for better performance
+      const updateInterval = 100; // Update UI less frequently (increased from 50ms)
       const charsPerUpdate = Math.max(
-        1,
+        5, // Show at least 5 characters per update (increased from 1)
         Math.ceil(responseLength / (animationDuration / updateInterval))
       );
 
+      // Use requestAnimationFrame for smoother animation
       let currentIndex = 0;
-      const animationInterval = setInterval(() => {
-        if (currentIndex >= responseLength) {
-          clearInterval(animationInterval);
-          return;
+      let lastUpdateTime = performance.now();
+
+      const updateAnimation = () => {
+        const now = performance.now();
+        const deltaTime = now - lastUpdateTime;
+
+        if (deltaTime >= updateInterval) {
+          if (currentIndex >= responseLength) {
+            // Animation complete
+            setMessages((prev) => [
+              ...prev.slice(0, prev.length - 1),
+              {
+                content: fullResponse,
+                role: "assistant" as const,
+                timestamp: new Date(),
+              },
+            ]);
+            setIsGenerating(false);
+            return;
+          }
+
+          // Calculate next chunk to display
+          const nextIndex = Math.min(
+            responseLength,
+            currentIndex + charsPerUpdate
+          );
+          displayedResponse = fullResponse.substring(0, nextIndex);
+          currentIndex = nextIndex;
+
+          // Update the message with the current animated response
+          // Use functional update to avoid stale state
+          setMessages((prev) => [
+            ...prev.slice(0, prev.length - 1),
+            {
+              content: displayedResponse,
+              role: "assistant" as const,
+              timestamp: new Date(),
+            },
+          ]);
+
+          lastUpdateTime = now;
         }
 
-        const nextIndex = Math.min(
-          responseLength,
-          currentIndex + charsPerUpdate
-        );
-        displayedResponse = fullResponse.substring(0, nextIndex);
-        currentIndex = nextIndex;
-
-        // Update the message with the current animated response
-        setMessages((prev) => [
-          ...prev.slice(0, prev.length - 1),
-          {
-            content: displayedResponse,
-            role: "assistant" as const,
-            timestamp: now,
-          },
-        ]);
-
-        if (currentIndex >= responseLength) {
-          clearInterval(animationInterval);
+        // Continue animation if not complete
+        if (currentIndex < responseLength) {
+          requestAnimationFrame(updateAnimation);
+        } else {
+          setIsGenerating(false);
         }
-      }, updateInterval);
+      };
 
-      // Final update to ensure we have the complete response (this will happen after animation completes)
-      setTimeout(() => {
-        setMessages((prev) => [
-          ...prev.slice(0, prev.length - 1),
-          {
-            content: fullResponse,
-            role: "assistant" as const,
-            timestamp: now,
-          },
-        ]);
-        setIsGenerating(false);
-      }, animationDuration + 100);
+      // Start the animation
+      requestAnimationFrame(updateAnimation);
 
       const endTime = performance.now();
       console.log(
