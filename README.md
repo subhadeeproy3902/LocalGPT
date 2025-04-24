@@ -14,7 +14,7 @@ LocalGPT is a browser-based AI assistant that runs entirely on your device witho
 ![LocalGPT Screenshot](./image.png)
 *Screenshot: LocalGPT running in a browser with offline capability*
 
-![](./online.png)
+![x](./online.png)
 *Screenshot: LocalGPT running in a browser with online capability*
 
 ## ✨ Features
