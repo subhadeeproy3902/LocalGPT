@@ -10,10 +10,10 @@ import { ScrollArea } from "./ui/scroll-area";
 import * as webllm from "@mlc-ai/web-llm";
 import { InitProgressReport, LogLevel } from "@mlc-ai/web-llm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { atomDark as dark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { atomDark as dark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import PerformanceMonitor from "./performance-monitor";
 import NetworkStatus from "./network-status";
-import remarkGfm from 'remark-gfm';
+import remarkGfm from "remark-gfm";
 import Markdown from "react-markdown";
 import { modelId, modelName } from "@/constant/modelConfig";
 
@@ -24,15 +24,13 @@ interface CodeBlockProps {
 
 const CodeBlock: React.FC<CodeBlockProps> = ({ language, value }) => {
   return (
-    <div style={{ position: 'relative', marginBottom: '1rem' }}>
+    <div style={{ position: "relative", marginBottom: "1rem" }}>
       <SyntaxHighlighter language={language} style={dark}>
         {value}
       </SyntaxHighlighter>
     </div>
   );
 };
-
-
 
 type Message = {
   content: string;
@@ -233,11 +231,14 @@ export default function ChatInterface() {
             const lastLoaded = new Date(lastLoadedTime);
             const now = new Date();
             // If model was loaded in the last 7 days, consider it valid
-            const daysSinceLastLoad = (now.getTime() - lastLoaded.getTime()) / (1000 * 60 * 60 * 24);
+            const daysSinceLastLoad =
+              (now.getTime() - lastLoaded.getTime()) / (1000 * 60 * 60 * 24);
             isRecentlyLoaded = daysSinceLastLoad < 7;
 
             if (isRecentlyLoaded && !isCached) {
-              console.log("Model was recently loaded but not detected in cache - may be a cache detection issue");
+              console.log(
+                "Model was recently loaded but not detected in cache - may be a cache detection issue"
+              );
               // If model was recently loaded but not detected in cache, we'll still try to load it
               setIsModelCached(true);
             }
@@ -260,7 +261,9 @@ export default function ChatInterface() {
                 try {
                   const db = request.result;
                   if (db.objectStoreNames.contains("models")) {
-                    console.log("IndexedDB cache verified and accessible while offline");
+                    console.log(
+                      "IndexedDB cache verified and accessible while offline"
+                    );
                   }
                 } catch (e) {
                   console.error("Error accessing IndexedDB while offline:", e);
@@ -296,7 +299,9 @@ export default function ChatInterface() {
         console.log("Model is cached, loading from cache");
         setLoadingStage("Loading model from cache...");
       } else if (!isOnline) {
-        console.log("Offline and model not detected in cache - attempting to load anyway");
+        console.log(
+          "Offline and model not detected in cache - attempting to load anyway"
+        );
         setLoadingStage("Offline - attempting to load model from cache...");
         // We'll still try to load the model even if our cache check didn't detect it
         // This provides a fallback in case our cache detection isn't perfect
@@ -368,7 +373,7 @@ export default function ChatInterface() {
           console.log("Warming up model with test inference...");
           await engine.chat.completions.create({
             messages: [{ role: "user", content: "Hello" }],
-            max_tokens: 1
+            max_tokens: 1,
           });
           console.log("Model warm-up complete");
         } catch (warmupError) {
@@ -427,7 +432,7 @@ export default function ChatInterface() {
           } else {
             setLoadingStage(
               "Error: You are offline and the model failed to load from cache. " +
-              "Please connect to the internet to download the model first."
+                "Please connect to the internet to download the model first."
             );
           }
 
@@ -475,7 +480,8 @@ export default function ChatInterface() {
       // Create configuration for generation without streaming
       // Only send the current user query to the LLM with a minimal system message
       // Use a custom interface to allow additional properties
-      interface CustomGenerationConfig extends webllm.ChatCompletionRequestBase {
+      interface CustomGenerationConfig
+        extends webllm.ChatCompletionRequestBase {
         context_window_size?: number;
         sliding_window_size?: number;
         max_tokens?: number;
@@ -491,13 +497,13 @@ export default function ChatInterface() {
         messages: [
           {
             role: "user",
-            content: userMessage.content
-          }
+            content: userMessage.content,
+          },
         ],
         stream: false,
         // Optimize context window for faster inference
         context_window_size: 1024, // Reduced from 2048 for faster processing
-        sliding_window_size: 512,  // Reduced from 1024 for faster processing
+        sliding_window_size: 512, // Reduced from 1024 for faster processing
         // Limit token generation for faster responses
         max_tokens: 1024,
         // Optimize sampling parameters
@@ -507,7 +513,7 @@ export default function ChatInterface() {
         batch_size: 8,
         // Reduce repetition penalties for faster processing
         frequency_penalty: 0.0,
-        presence_penalty: 0.0
+        presence_penalty: 0.0,
       };
 
       const response = (await engine.chat.completions.create(
@@ -605,7 +611,7 @@ export default function ChatInterface() {
             content: fullResponse,
             role: "assistant" as const,
             timestamp: now,
-          }
+          },
         ];
 
         const conversationHistory = {
@@ -653,7 +659,8 @@ export default function ChatInterface() {
     // Create a new system prompt
     const systemPrompt = {
       role: "system" as const,
-      content: "You are a helpful assistant. You provide answers only in Markdown format",
+      content:
+        "You are a helpful assistant. You provide answers only in Markdown format",
       timestamp: new Date(),
     };
 
@@ -742,7 +749,8 @@ export default function ChatInterface() {
                     The model is not detected in the cache on this device.
                   </p>
                   <p className="mb-2">
-                    Connect to the internet to download the model for offline use.
+                    Connect to the internet to download the model for offline
+                    use.
                   </p>
                   <button
                     onClick={() => window.location.reload()}
@@ -754,7 +762,8 @@ export default function ChatInterface() {
               ) : (
                 <>
                   <p className="mb-2">
-                    The model is cached but failed to load. This could be due to:
+                    The model is cached but failed to load. This could be due
+                    to:
                   </p>
                   <ul className="text-left list-disc pl-5 mb-2">
                     <li>Incomplete model download</li>
@@ -965,9 +974,17 @@ export default function ChatInterface() {
                                   remarkPlugins={[remarkGfm]}
                                   components={{
                                     code({ className, children, ...props }) {
-                                      const match = /language-(\w+)/.exec(className || '');
+                                      const match = /language-(\w+)/.exec(
+                                        className || ""
+                                      );
                                       return match ? (
-                                        <CodeBlock language={match[1]} value={String(children).replace(/\n$/, '')} />
+                                        <CodeBlock
+                                          language={match[1]}
+                                          value={String(children).replace(
+                                            /\n$/,
+                                            ""
+                                          )}
+                                        />
                                       ) : (
                                         <code className={className} {...props}>
                                           {children}
@@ -1058,7 +1075,11 @@ export default function ChatInterface() {
                 : isGenerating
                 ? `Generating response with model...`
                 : engine
-                ? `Using model (${isModelCached ? 'cached and ready for offline use' : 'online mode'})`
+                ? `Using model (${
+                    isModelCached
+                      ? "cached and ready for offline use"
+                      : "online mode"
+                  })`
                 : !isOnline
                 ? isModelCached
                   ? `Offline mode - model cached but failed to load`
