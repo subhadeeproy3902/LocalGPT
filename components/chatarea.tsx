@@ -2,10 +2,7 @@
 
 import type React from "react";
 import { useState, useRef, useEffect } from "react";
-import {
-  Mic,
-  Send,
-} from "lucide-react";
+import { Mic, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import AutoResizeTextarea from "./autosize-textarea";
 import { cn } from "@/lib/utils";
@@ -48,7 +45,7 @@ export default function ChatInterface() {
       {
         role: "system",
         content:
-          "You are a helpful assistant. You provide markdown coded responses only.",
+          "You are a helpful assistant. You provide markdown coded responses only. You are just like ChatGPT.",
       },
     ];
   });
@@ -151,8 +148,8 @@ export default function ChatInterface() {
   useEffect(() => {
     const loadModel = async () => {
       // Get the selected model
-      const selectedModel = "SmolLM2-360M-Instruct-q4f16_1-MLC";
-      const selectedModelName = "SmolLM2 360M";
+      const selectedModel = "Phi-3.5-mini-instruct-q4f16_1-MLC-1k";
+      const selectedModelName = "Phi 3.5 mini";
 
       setIsLoading(true);
       setHadGpuError(false);
@@ -271,8 +268,6 @@ export default function ChatInterface() {
       const generationConfig = {
         messages: currentMessages,
         stream: true, // Enable streaming for faster response
-        temperature: 0.7, // Add some creativity but not too random
-        top_p: 0.9, // Slightly more focused sampling
       };
 
       // Start the generation
