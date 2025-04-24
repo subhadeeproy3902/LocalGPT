@@ -1,14 +1,9 @@
 "use client";
 
 import type React from "react";
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
-  Plus,
-  Search,
-  Sparkles,
-  ImageIcon,
   Mic,
-  MoreHorizontal,
   Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,7 +21,7 @@ type Message = {
 export default function ChatInterface() {
   // Initialize messages from localStorage if available
   const [messages, setMessages] = useState<Message[]>(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       try {
         const savedConversation = localStorage.getItem("conversationHistory");
         if (savedConversation) {
@@ -34,9 +29,13 @@ export default function ChatInterface() {
           // Check if the saved conversation is less than 24 hours old
           const timestamp = new Date(parsed.timestamp);
           const now = new Date();
-          const hoursSinceLastConversation = (now.getTime() - timestamp.getTime()) / (1000 * 60 * 60);
+          const hoursSinceLastConversation =
+            (now.getTime() - timestamp.getTime()) / (1000 * 60 * 60);
 
-          if (hoursSinceLastConversation < 24 && Array.isArray(parsed.messages)) {
+          if (
+            hoursSinceLastConversation < 24 &&
+            Array.isArray(parsed.messages)
+          ) {
             console.log("Restored conversation from localStorage");
             return parsed.messages;
           }
@@ -48,8 +47,9 @@ export default function ChatInterface() {
     return [
       {
         role: "system",
-        content: "You are a helpful assistant. You provide markdown coded responses only.",
-      }
+        content:
+          "You are a helpful assistant. You provide markdown coded responses only.",
+      },
     ];
   });
   const [input, setInput] = useState("");
@@ -57,12 +57,11 @@ export default function ChatInterface() {
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
-  const [modelName, setModelName] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Check if the browser is online
   const [isOnline, setIsOnline] = useState<boolean>(
-    typeof navigator !== 'undefined' ? navigator.onLine : true
+    typeof navigator !== "undefined" ? navigator.onLine : true
   );
 
   // Track if model is cached
@@ -74,12 +73,12 @@ export default function ChatInterface() {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
 
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
 
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
     };
   }, []);
 
@@ -113,7 +112,11 @@ export default function ChatInterface() {
 
             countRequest.onsuccess = () => {
               const hasEntries = countRequest.result > 0;
-              console.log(`Model cache check: ${hasEntries ? "Found cached data" : "No cached data found"}`);
+              console.log(
+                `Model cache check: ${
+                  hasEntries ? "Found cached data" : "No cached data found"
+                }`
+              );
               resolve(hasEntries);
             };
 
@@ -133,31 +136,9 @@ export default function ChatInterface() {
     }
   };
 
-  // Available models in order of increasing size/quality
-  const availableModels = useMemo(() => [
-    { id: "SmolLM2-360M-Instruct-q4f16_1-MLC", name: "SmolLM2-360M (Tiny - 360MB)", memoryRequired: "~400MB" },
-    { id: "SmolLM2-1.7B-Instruct-q4f16_1-MLC", name: "SmolLM2-1.7B (Small - 1.7GB)", memoryRequired: "~1.8GB" },
-    { id: "Phi-3.5-mini-instruct-q4f16_1-MLC-1k", name: "Phi-3.5-mini (Medium - 3.8GB)", memoryRequired: "~2.5GB" },
-    { id: "Gemma-2-2b-it-q4f16_1-MLC-1k", name: "Gemma-2-2B (Medium - 2GB)", memoryRequired: "~1.6GB" },
-  ], []);
-
-  // State for model selector
-  const [selectedModelIndex, setSelectedModelIndex] = useState<number>(() => {
-    // Try to get the last successful model from localStorage
-    if (typeof window !== 'undefined') {
-      const lastModel = localStorage.getItem("lastSuccessfulModel");
-      if (lastModel) {
-        const index = availableModels.findIndex(model => model.id === lastModel);
-        if (index !== -1) return index;
-      }
-    }
-    // Default to the smallest model for safety
-    return 0;
-  });
-
   // State for low memory mode
   const [lowMemoryMode, setLowMemoryMode] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       return localStorage.getItem("lowMemoryMode") === "true";
     }
     return false;
@@ -170,15 +151,14 @@ export default function ChatInterface() {
   useEffect(() => {
     const loadModel = async () => {
       // Get the selected model
-      const modelInfo = availableModels[selectedModelIndex];
-      const selectedModel = modelInfo.id;
+      const selectedModel = "SmolLM2-360M-Instruct-q4f16_1-MLC";
+      const selectedModelName = "SmolLM2 360M";
 
       setIsLoading(true);
-      setModelName(modelInfo.name);
       setHadGpuError(false);
 
       // Check if model is cached
-      setLoadingStage(`Checking if ${modelInfo.name} is cached...`);
+      setLoadingStage(`Checking if ${selectedModelName} is cached...`);
       const isCached = await checkModelCache(selectedModel);
       setIsModelCached(isCached);
 
@@ -192,7 +172,7 @@ export default function ChatInterface() {
         return;
       } else {
         console.log("Model not cached, downloading...");
-        setLoadingStage(`Downloading model (${modelInfo.memoryRequired} required)...`);
+        setLoadingStage(`Downloading model (~400MB required)...`);
       }
 
       // Configure the engine with IndexedDB caching for better offline support
@@ -216,12 +196,15 @@ export default function ChatInterface() {
 
           setLoadingProgress(progress.progress);
         },
-        logLevel: "INFO" as LogLevel // Set to INFO to see more detailed logs
+        logLevel: "INFO" as LogLevel, // Set to INFO to see more detailed logs
       };
 
       try {
         console.log("Creating MLCEngine for model:", selectedModel);
-        const engine = await webllm.CreateMLCEngine(selectedModel, engineConfig);
+        const engine = await webllm.CreateMLCEngine(
+          selectedModel,
+          engineConfig
+        );
         console.log("Model loaded successfully");
         setEngine(engine);
         setIsLoading(false);
@@ -232,26 +215,26 @@ export default function ChatInterface() {
 
         // Check if this was a GPU memory error
         const errorString = String(error);
-        const isGpuMemoryError = errorString.includes("Device was lost") ||
-                                errorString.includes("GPU") ||
-                                errorString.includes("memory") ||
-                                errorString.includes("DXGI_ERROR");
+        const isGpuMemoryError =
+          errorString.includes("Device was lost") ||
+          errorString.includes("GPU") ||
+          errorString.includes("memory") ||
+          errorString.includes("DXGI_ERROR");
 
         if (isGpuMemoryError) {
           setHadGpuError(true);
-          setLoadingStage("GPU memory error detected. Try a smaller model or enable low memory mode.");
+          setLoadingStage(
+            "GPU memory error detected. Try a smaller model or enable low memory mode."
+          );
 
-          // If not already in low memory mode, suggest it
           if (!lowMemoryMode) {
-            setLoadingStage("GPU memory error. Try enabling low memory mode below.");
-          } else if (selectedModelIndex > 0) {
-            // If already in low memory mode, suggest an even smaller model
-            setLoadingStage("GPU memory error. Try selecting a smaller model below.");
-          } else {
-            setLoadingStage("Your device doesn't have enough GPU memory for any model. Try on a different device.");
+            setLowMemoryMode(true);
+            localStorage.setItem("lowMemoryMode", "true");
           }
         } else if (!isOnline) {
-          setLoadingStage("Error: You are offline and the model failed to load from cache");
+          setLoadingStage(
+            "Error: You are offline and the model failed to load from cache"
+          );
         } else {
           setLoadingStage("Failed to load model. Please try again later.");
         }
@@ -261,7 +244,7 @@ export default function ChatInterface() {
     };
 
     loadModel();
-  }, [isOnline, selectedModelIndex, lowMemoryMode, availableModels]);
+  }, [isOnline, lowMemoryMode]);
 
   const handleSendMessage = async () => {
     if (!input.trim() || !engine || isGenerating) return;
@@ -300,7 +283,7 @@ export default function ChatInterface() {
       const updateInterval = 50; // Update UI every 50ms at most to avoid excessive re-renders
 
       // Check if response is streaming or not
-      if ('choices' in response && !('delta' in response.choices[0])) {
+      if ("choices" in response && !("delta" in response.choices[0])) {
         // Non-streaming response
         fullResponse = response.choices[0].message.content || "";
 
@@ -348,19 +331,26 @@ export default function ChatInterface() {
       ]);
 
       const endTime = performance.now();
-      console.log(`Response generated in ${(endTime - startTime).toFixed(2)}ms`);
+      console.log(
+        `Response generated in ${(endTime - startTime).toFixed(2)}ms`
+      );
 
       // Cache the conversation in localStorage for quick recovery if browser refreshes
       try {
         const conversationHistory = {
-          messages: [...currentMessages, { content: fullResponse, role: "assistant" as const }],
-          timestamp: new Date().toISOString()
+          messages: [
+            ...currentMessages,
+            { content: fullResponse, role: "assistant" as const },
+          ],
+          timestamp: new Date().toISOString(),
         };
-        localStorage.setItem("conversationHistory", JSON.stringify(conversationHistory));
+        localStorage.setItem(
+          "conversationHistory",
+          JSON.stringify(conversationHistory)
+        );
       } catch (e) {
         console.log("Could not save conversation to localStorage:", e);
       }
-
     } catch (error) {
       console.error("Error generating response:", error);
 
@@ -396,15 +386,16 @@ export default function ChatInterface() {
     setMessages([
       {
         role: "system",
-        content: "You are a helpful assistant. You provide markdown coded responses only.",
-      }
+        content:
+          "You are a helpful assistant. You provide markdown coded responses only.",
+      },
     ]);
 
     // Clear localStorage
     localStorage.removeItem("conversationHistory");
 
     // Optionally clear model cache
-    if (clearCache && typeof window !== 'undefined') {
+    if (clearCache && typeof window !== "undefined") {
       try {
         // Delete the IndexedDB database to clear model cache
         const dbName = "webllm-indexeddb-cache";
@@ -429,7 +420,7 @@ export default function ChatInterface() {
     <div className="flex flex-col justify-between h-full">
       {isLoading ? (
         <div className="flex flex-col items-center justify-center h-full">
-          <div className="text-white text-xl mb-4">Loading {modelName}</div>
+          <div className="text-white text-xl mb-4">Loading </div>
           <div className="text-gray-400 text-sm mb-4">{loadingStage}</div>
           <div className="w-64 h-2 bg-[#2a2a2a] rounded-full overflow-hidden">
             <div
@@ -443,9 +434,10 @@ export default function ChatInterface() {
 
           {!isOnline && (
             <div className="mt-4 p-3 bg-red-900/30 border border-red-700 rounded-md text-red-300">
-              You are currently offline. {isModelCached ?
-                "Loading model from cache..." :
-                "Cannot load model without internet connection."}
+              You are currently offline.{" "}
+              {isModelCached
+                ? "Loading model from cache..."
+                : "Cannot load model without internet connection."}
             </div>
           )}
 
@@ -460,61 +452,6 @@ export default function ChatInterface() {
               GPU memory error detected. Try the options below:
             </div>
           )}
-
-          {/* Model selection */}
-          <div className="mt-6 w-80 p-4 bg-[#2a2a2a] rounded-lg">
-            <h3 className="text-white text-sm font-medium mb-2">Select Model Size</h3>
-            <div className="space-y-2">
-              {availableModels.map((model, index) => (
-                <div
-                  key={model.id}
-                  className={`p-2 rounded cursor-pointer flex items-center ${
-                    selectedModelIndex === index
-                      ? 'bg-blue-900/50 border border-blue-500'
-                      : 'hover:bg-[#3a3a3a]'
-                  }`}
-                  onClick={() => {
-                    setSelectedModelIndex(index);
-                    localStorage.setItem("lastSelectedModel", model.id);
-                  }}
-                >
-                  <div className={`w-3 h-3 rounded-full mr-2 ${
-                    selectedModelIndex === index ? 'bg-blue-500' : 'bg-gray-600'
-                  }`}></div>
-                  <div>
-                    <div className="text-white text-xs">{model.name}</div>
-                    <div className="text-gray-400 text-xs">Memory: {model.memoryRequired}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Low memory mode toggle */}
-            <div className="mt-4">
-              <label className="flex items-center cursor-pointer">
-                <div
-                  className={`w-10 h-5 rounded-full p-1 transition-colors ${
-                    lowMemoryMode ? 'bg-blue-600' : 'bg-gray-600'
-                  }`}
-                  onClick={() => {
-                    const newValue = !lowMemoryMode;
-                    setLowMemoryMode(newValue);
-                    localStorage.setItem("lowMemoryMode", String(newValue));
-                  }}
-                >
-                  <div
-                    className={`bg-white w-3 h-3 rounded-full transform transition-transform ${
-                      lowMemoryMode ? 'translate-x-5' : ''
-                    }`}
-                  ></div>
-                </div>
-                <span className="ml-2 text-white text-xs">Low Memory Mode (CPU fallback)</span>
-              </label>
-              <p className="text-gray-400 text-xs mt-1">
-                Enable this if you experience GPU memory errors. Will be slower but more reliable.
-              </p>
-            </div>
-          </div>
         </div>
       ) : (
         <ScrollArea className="py-4 overflow-y-auto px-4 h-full">
@@ -541,9 +478,18 @@ export default function ChatInterface() {
                   />
                   {message.content === "" && isGenerating && (
                     <div className="flex space-x-2 mt-2">
-                      <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" style={{ animationDelay: "0ms" }}></div>
-                      <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" style={{ animationDelay: "300ms" }}></div>
-                      <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" style={{ animationDelay: "600ms" }}></div>
+                      <div
+                        className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"
+                        style={{ animationDelay: "0ms" }}
+                      ></div>
+                      <div
+                        className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"
+                        style={{ animationDelay: "300ms" }}
+                      ></div>
+                      <div
+                        className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"
+                        style={{ animationDelay: "600ms" }}
+                      ></div>
                     </div>
                   )}
                 </div>
@@ -575,51 +521,6 @@ export default function ChatInterface() {
             </div>
 
             <div className="flex items-center px-2 pb-2 gap-1">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 rounded-full text-gray-400 hover:text-white hover:bg-[#3a3a3a]"
-                disabled={isLoading || !engine}
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-
-              <Button
-                variant="ghost"
-                className="h-8 rounded-full text-gray-400 hover:text-white hover:bg-[#3a3a3a] px-3 text-xs flex items-center gap-1"
-                disabled={isLoading || !engine}
-              >
-                <Search className="h-4 w-4" />
-                <span>Search</span>
-              </Button>
-
-              <Button
-                variant="ghost"
-                className="h-8 rounded-full text-gray-400 hover:text-white hover:bg-[#3a3a3a] px-3 text-xs flex items-center gap-1"
-                disabled={isLoading || !engine}
-              >
-                <Sparkles className="h-4 w-4" />
-                <span>Reason</span>
-              </Button>
-
-              <Button
-                variant="ghost"
-                className="h-8 rounded-full text-gray-400 hover:text-white hover:bg-[#3a3a3a] px-3 text-xs flex items-center gap-1"
-                disabled={isLoading || !engine}
-              >
-                <ImageIcon className="h-4 w-4" />
-                <span>Create image</span>
-              </Button>
-
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 rounded-full text-gray-400 hover:text-white hover:bg-[#3a3a3a]"
-                disabled={isLoading || !engine}
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-
               <div className="flex-1"></div>
 
               <Button
@@ -653,11 +554,11 @@ export default function ChatInterface() {
           <div className="flex flex-col items-center mt-2">
             <p className="text-xs text-gray-500 text-center">
               {isLoading
-                ? `Loading ${modelName}...`
+                ? `Loading model...`
                 : isGenerating
-                ? `Generating response with ${modelName}...`
+                ? `Generating response with model...`
                 : engine
-                ? `Using ${modelName} (cached and ready for offline use)`
+                ? `Using model (cached and ready for offline use)`
                 : "Model not loaded"}
             </p>
 
