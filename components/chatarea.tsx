@@ -185,7 +185,7 @@ export default function ChatInterface() {
     const preloadModelCheck = async () => {
       if (typeof window !== "undefined") {
         // Get the selected model
-        const selectedModel = "TinyLlama-1.1B-Chat-v1.0-q4f16_1-MLC-1k";
+        const selectedModel = "gemma-2-2b-it-q4f16_1-MLC-1k";
 
         // Check if model is cached early
         const isCached = await checkModelCache(selectedModel);
@@ -214,8 +214,8 @@ export default function ChatInterface() {
   useEffect(() => {
     const loadModel = async () => {
       // Get the selected model - using a smaller quantized model for faster loading
-      const selectedModel = "TinyLlama-1.1B-Chat-v1.0-q4f16_1-MLC-1k";
-      const selectedModelName = "Tiny Llama";
+      const selectedModel = "gemma-2-2b-it-q4f16_1-MLC-1k";
+      const selectedModelName = "Gemma 2";
 
       setIsLoading(true);
       setHadGpuError(false);
