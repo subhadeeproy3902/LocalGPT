@@ -25,6 +25,8 @@ LocalGPT is a browser-based AI assistant that runs entirely on your device witho
 - **🌐 Network Status Aware**: Shows online/offline status and adapts accordingly
 - **📊 Performance Monitoring**: Real-time CPU/GPU usage metrics
 - **🎨 Modern UI**: Clean, responsive interface that works on desktop and mobile devices
+- **📱 PWA Support**: Install as a standalone app on your device for better offline experience
+- **🔄 Production URL Support**: Works on both localhost and production URLs
 
 > **Important:** You must first download the model while online before using offline. See the [Offline Usage Guide](#-offline-usage-guide) for details.
 
@@ -163,12 +165,25 @@ The LLM model must be downloaded and cached while you have an internet connectio
    - You'll see "Using model (cached and ready for offline use)" at the bottom
    - All functionality will continue to work without internet
 
-3. **Troubleshooting Offline Issues**:
+3. **Installing as a PWA (Recommended for Best Offline Experience)**:
+   - For the best offline experience, install LocalGPT as a Progressive Web App (PWA)
+   - In Chrome/Edge: Click the install icon (➕) in the address bar or use the "Install" button in the app
+   - On mobile: Tap "Add to Home Screen" in your browser menu
+   - Once installed, LocalGPT will work like a native app, even when offline
+   - The PWA version has better storage persistence and offline reliability
+
+4. **Using on Production URLs**:
+   - LocalGPT works on both localhost and production URLs (your deployed website)
+   - The model cache is specific to each domain, so you'll need to download the model once per domain
+   - The PWA can be installed from any URL where LocalGPT is hosted
+
+5. **Troubleshooting Offline Issues**:
    - If you see "Offline mode - model not available", it means you didn't complete the online download
    - You MUST connect to the internet and let the model fully download first
    - If the model doesn't load offline after downloading, try clearing your browser cache and redownloading
    - Some browsers limit offline storage - Chrome works best for offline use
    - The app includes diagnostic information at the bottom to help identify issues
+   - For persistent storage issues, install as a PWA for better reliability
 
 ## 🔧 Performance Tips
 
@@ -207,6 +222,18 @@ yarn start
 bun build
 bun start
 ```
+
+### Deploying to a Production URL
+
+When deploying to a production URL, the PWA and offline functionality will work automatically. The service worker will be registered and the app will be installable as a PWA.
+
+1. **Build the project** using the commands above
+2. **Deploy the build** to your hosting provider (Vercel, Netlify, etc.)
+3. **Visit your production URL** and verify that the app works
+4. **Download the model** while online to enable offline functionality
+5. **Install as a PWA** for the best offline experience
+
+Note that the model cache is domain-specific, so users will need to download the model once for each domain where LocalGPT is hosted.
 
 ## 📋 System Requirements
 
