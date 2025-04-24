@@ -39,14 +39,16 @@ export default function ChatInterface() {
           ) {
             console.log("Restored conversation from localStorage");
             // Convert string timestamps back to Date objects
-            const messagesWithProperDates = parsed.messages.map((msg: {
-              content: string;
-              role: "user" | "assistant" | "system";
-              timestamp?: string;
-            }) => ({
-              ...msg,
-              timestamp: msg.timestamp ? new Date(msg.timestamp) : undefined
-            }));
+            const messagesWithProperDates = parsed.messages.map(
+              (msg: {
+                content: string;
+                role: "user" | "assistant" | "system";
+                timestamp?: string;
+              }) => ({
+                ...msg,
+                timestamp: msg.timestamp ? new Date(msg.timestamp) : undefined,
+              })
+            );
             return messagesWithProperDates;
           }
         }
@@ -517,7 +519,11 @@ export default function ChatInterface() {
                       let timeString = "";
                       const timestamp = message.timestamp;
 
-                      if (timestamp && timestamp instanceof Date && !isNaN(timestamp.getTime())) {
+                      if (
+                        timestamp &&
+                        timestamp instanceof Date &&
+                        !isNaN(timestamp.getTime())
+                      ) {
                         timeString = timestamp.toLocaleTimeString([], {
                           hour: "2-digit",
                           minute: "2-digit",
@@ -545,7 +551,11 @@ export default function ChatInterface() {
                             <div className="text-xs text-gray-500">
                               {message.role === "user" ? "You" : "Assistant"}
                             </div>
-                            {timeString && <div className="text-xs text-gray-600">{timeString}</div>}
+                            {timeString && (
+                              <div className="text-xs text-gray-600">
+                                {timeString}
+                              </div>
+                            )}
                           </div>
                           <div
                             className={`text-sm ${
@@ -589,7 +599,11 @@ export default function ChatInterface() {
                   const timestamp = message.timestamp;
                   let timeString = "";
 
-                  if (timestamp && timestamp instanceof Date && !isNaN(timestamp.getTime())) {
+                  if (
+                    timestamp &&
+                    timestamp instanceof Date &&
+                    !isNaN(timestamp.getTime())
+                  ) {
                     // Ensure timestamp is a valid Date object
                     const now = new Date();
                     const isToday =
@@ -636,7 +650,9 @@ export default function ChatInterface() {
                       key={index}
                       className={cn(
                         "my-4",
-                        message.role === "user" ? "ml-auto w-fit max-w-[90%]" : "w-full mr-auto"
+                        message.role === "user"
+                          ? "ml-auto w-fit max-w-[90%]"
+                          : "w-full mr-auto"
                       )}
                     >
                       {message.role === "user" && (
@@ -671,7 +687,9 @@ export default function ChatInterface() {
                                 ></div>
                               </div>
                             ) : (
-                              <ReactMarkdown>{message.content}</ReactMarkdown>
+                              <div className="markdown-body">
+                                <ReactMarkdown>{message.content}</ReactMarkdown>
+                              </div>
                             )}
                           </div>
                           {timestamp && (

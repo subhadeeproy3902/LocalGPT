@@ -134,75 +134,103 @@
   }
 }
 
-/* Markdown styling for chat messages */
-.prose {
-  @apply text-sm;
+/* Headings */
+.markdown-body h1 {
+  font-size: 2.5rem; /* 40px */
 }
 
-.prose p {
-  @apply my-2;
+.markdown-body h2 {
+  font-size: 2rem; /* 32px */
 }
 
-.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
-  @apply font-bold my-3;
+.markdown-body h3 {
+  font-size: 1.75rem; /* 28px */
 }
 
-.prose h1 {
-  @apply text-xl;
+.markdown-body h4 {
+  font-size: 1.5rem; /* 24px */
 }
 
-.prose h2 {
-  @apply text-lg;
+.markdown-body h5 {
+  font-size: 1.25rem; /* 20px */
 }
 
-.prose h3 {
-  @apply text-base;
+.markdown-body h6 {
+  font-size: 1rem; /* 16px */
 }
 
-.prose ul, .prose ol {
-  @apply pl-6 my-2;
+/* Headings */
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  font-weight: 600;
+  line-height: 1.15;
+  color: #fff0e8;
+  margin-top: 15px;
+  margin-bottom: 10px;
 }
 
-.prose ul {
-  @apply list-disc;
+/* Paragraphs */
+.markdown-body p {
+  margin-bottom: 10px;
 }
 
-.prose ol {
-  @apply list-decimal;
+/* Links */
+.markdown-body a {
+  @apply text-orange-500;
+  text-decoration: none;
 }
 
-.prose li {
-  @apply my-1;
+.markdown-body a:hover {
+  text-decoration: underline;
 }
 
-.prose code {
-  @apply bg-[#2a2a2a] px-1 py-0.5 rounded text-xs font-mono;
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 20px;
+}
+.markdown-body ul li {
+  list-style-type: disc;
 }
 
-.prose pre {
-  @apply bg-[#2a2a2a] p-3 rounded-md my-3 overflow-x-auto;
+.markdown-body blockquote {
+  border-left: 4px solid #957b5d;
+  margin-left: 0;
+  margin-right: 0;
+  padding-left: 15px;
+  color: #a3743d;
 }
 
-.prose pre code {
-  @apply bg-transparent p-0 text-xs;
+.markdown-body pre {
+  background-color: #464646dc;
+  border-left: 3px solid #e3843b;
+  color: white;
+  padding: 10px;
+  overflow-x: auto;
 }
 
-.prose blockquote {
-  @apply border-l-4 border-[#3a3a3a] pl-3 italic my-3;
+.markdown-body code {
+  padding: 2px 4px;
+  font-size: 90%;
+  border-radius: 3px;
 }
 
-.prose a {
-  @apply text-blue-400 underline;
+/* Tables */
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
 }
 
-.prose table {
-  @apply border-collapse my-3 w-full;
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid hsl(0, 0%, 32%);
+  padding: 8px;
+  text-align: left;
 }
 
-.prose th, .prose td {
-  @apply border border-[#3a3a3a] px-2 py-1;
-}
-
-.prose th {
-  @apply bg-[#2a2a2a];
+.markdown-body th {
+  background-color: #626161;
 }
