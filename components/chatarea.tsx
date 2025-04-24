@@ -40,7 +40,7 @@ type Message = {
 };
 
 export default function ChatInterface() {
-  // Initialize messages from localStorage if available
+  // Initialize history from localStorage if available - this stores the full conversation
   const [messages, setMessages] = useState<Message[]>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -80,7 +80,7 @@ export default function ChatInterface() {
       {
         role: "system",
         content:
-          "You are a helpful assistant. You provide markdown coded responses only. You are just like ChatGPT.",
+          "You are a helpful assistant.",
         timestamp: new Date(),
       },
     ];
@@ -289,15 +289,17 @@ export default function ChatInterface() {
       role: "user" as const,
       timestamp: now,
     };
+
+    // Add user message to the full conversation history
     setMessages([...messages, userMessage]);
     setInput("");
     setIsGenerating(true);
 
-    // Store messages for this conversation to avoid state update issues
-    const currentMessages = [...messages, userMessage];
+    // We'll create a message array with just the current user query and a minimal system message
+    // This prevents context window size issues by not sending any conversation history
 
     try {
-      // Add a temporary loading message
+      // Add a temporary loading message to the UI
       setMessages((prev) => [
         ...prev,
         { content: "", role: "assistant" as const, timestamp: now },
@@ -307,15 +309,26 @@ export default function ChatInterface() {
       const startTime = performance.now();
 
       // Create configuration for generation without streaming
-      const generationConfig = {
-        messages: currentMessages.map(({ role, content }) => ({
-          role,
-          content,
-        })), // Strip timestamp for API
-        stream: false, // Disable streaming for more reliable response
+      // Only send the current user query to the LLM with a minimal system message
+      // Use a custom interface to allow additional properties
+      interface CustomGenerationConfig extends webllm.ChatCompletionRequestBase {
+        context_window_size?: number;
+        sliding_window_size?: number;
+      }
+
+      const generationConfig: CustomGenerationConfig = {
+        messages: [
+          {
+            role: "user",
+            content: userMessage.content
+          }
+        ],
+        stream: false,
+        // Add context window parameters to ensure we use the increased context window
+        context_window_size: 2048,
+        sliding_window_size: 1024
       };
 
-      // Start the generation
       const response = (await engine.chat.completions.create(
         generationConfig
       )) as webllm.ChatCompletion;
@@ -385,15 +398,18 @@ export default function ChatInterface() {
 
       // Cache the conversation in localStorage for quick recovery if browser refreshes
       try {
+        // Get the updated messages array with the assistant's response
+        const updatedMessages = [
+          ...messages.slice(0, messages.length - 1), // Remove the temporary loading message
+          {
+            content: fullResponse,
+            role: "assistant" as const,
+            timestamp: now,
+          }
+        ];
+
         const conversationHistory = {
-          messages: [
-            ...currentMessages,
-            {
-              content: fullResponse,
-              role: "assistant" as const,
-              timestamp: now,
-            },
-          ],
+          messages: updatedMessages,
           timestamp: new Date().toISOString(),
         };
         localStorage.setItem(
@@ -434,15 +450,15 @@ export default function ChatInterface() {
 
   // Function to clear conversation and optionally clear model cache
   const clearConversation = (clearCache = false) => {
-    // Clear conversation
-    setMessages([
-      {
-        role: "system",
-        content:
-          "You are a helpful assistant. You provide markdown coded responses only.",
-        timestamp: new Date(),
-      },
-    ]);
+    // Create a new system prompt
+    const systemPrompt = {
+      role: "system" as const,
+      content: "You are a helpful assistant.",
+      timestamp: new Date(),
+    };
+
+    // Clear conversation history
+    setMessages([systemPrompt]);
 
     // Clear localStorage
     localStorage.removeItem("conversationHistory");
@@ -690,7 +706,7 @@ export default function ChatInterface() {
 
                       {message.role === "assistant" && (
                         <div className="flex flex-col">
-                          <div className="bg-[#1a1a1a] rounded-3xl px-4 py-2 text-white text-sm prose prose-invert max-w-none">
+                          <div className="bg-[#1a1a1a] w-fit rounded-3xl px-4 py-2 text-white text-sm prose prose-invert max-w-none">
                             {message.content === "" && isGenerating ? (
                               <div className="flex space-x-2 mt-2">
                                 <div
