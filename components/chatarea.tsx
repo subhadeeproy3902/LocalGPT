@@ -672,7 +672,7 @@ export default function ChatInterface() {
                         "my-4",
                         message.role === "user"
                           ? "ml-auto w-fit max-w-[90%]"
-                          : "w-fit mr-auto"
+                          : "w-full mr-auto"
                       )}
                     >
                       {message.role === "user" && (
