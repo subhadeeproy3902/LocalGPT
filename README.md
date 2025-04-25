@@ -202,9 +202,9 @@ To get the best experience with LocalGPT:
 - **GPU**: Integrated graphics minimum, dedicated GPU recommended
 - **Storage**: 1GB free space for model caching
 
-## 📄 License
+## 📄 License)
 
-This project is licensed under the [MIT LICENSE](./LICENCE) - see the LICENSE file for details.
+This project is licensed under the [MIT [LICENSE](https://github.com/subhadeeproy3902/LocalGPT/blob/main/LICENSE) - see the LICENSE file for details.
 
 ## 🙏 Acknowledgements
 
