@@ -204,7 +204,7 @@ To get the best experience with LocalGPT:
 
 ## 📄 License)
 
-This project is licensed under the [MIT [LICENSE](https://github.com/subhadeeproy3902/LocalGPT/blob/main/LICENSE) - see the LICENSE file for details.
+This project is licensed under the [MIT LICENSE](https://github.com/subhadeeproy3902/LocalGPT/blob/main/LICENSE) - see the LICENSE file for details.
 
 ## 🙏 Acknowledgements
 
